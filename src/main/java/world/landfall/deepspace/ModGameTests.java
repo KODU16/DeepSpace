@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
 import java.util.function.Consumer;
 
 @GameTestHolder(Deepspace.MODID)
+@SuppressWarnings("removal") // NeoForge currently requires the deprecated MOD bus selector here.
 @EventBusSubscriber(modid = Deepspace.MODID, bus = EventBusSubscriber.Bus.MOD)
 public class ModGameTests {
     @SubscribeEvent

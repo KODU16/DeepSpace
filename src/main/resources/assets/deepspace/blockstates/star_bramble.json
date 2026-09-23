@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "half=lower,mature=true": {"model": "deepspace:block/star_bramble"},
+    "half=upper,mature=true": {"model": "deepspace:block/star_bramble_top"},
+    "half=lower,mature=false": {"model": "deepspace:block/star_bramble_empty"},
+    "half=upper,mature=false": {"model": "deepspace:block/star_bramble_empty_top"}
+  }
+}

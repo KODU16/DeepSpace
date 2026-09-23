@@ -33,8 +33,6 @@ float fog_distance(vec3 pos, int shape) {
 }
 #line 3 0
 
-uniform sampler2D Sampler0;
-
 uniform vec4 ColorModulator;
 uniform float FogStart;
 uniform float FogEnd;
@@ -43,14 +41,32 @@ uniform float Time;
 
 in float vertexDistance;
 in vec4 vertexColor;
-in vec2 texCoord0;
+in vec3 atmosphereNormal;
+in vec3 viewDirection;
+in vec3 lightDirection;
 
 out vec4 fragColor;
 void main() {
-    vec4 color = vec4(1, 1, 1, texture(Sampler0, texCoord0).r) * ColorModulator * vertexColor * (1 - linear_fog_fade(4000, 3900, vertexDistance));
-    //vec4 color = vec4(mod(texCoord0.xy, 1), 0, .5);
+    vec3 normal = normalize(atmosphereNormal);
+    vec3 toCamera = normalize(viewDirection);
+    vec3 toSun = normalize(lightDirection);
 
-    fragColor = color;
+    // Grazing views form the thin shell while direct sunlight selects the bright limb.
+    float rim = smoothstep(0.08, 0.92, 1.0 - abs(dot(normal, toCamera)));
+    float solarDiffuse = max(dot(normal, toSun), 0.0);
+    float forwardScatter = pow(max(dot(-toCamera, toSun), 0.0), 8.0) * rim;
+    // Match planet.vsh so the outer shell follows the lit/dark surface.
+    float illumination = 0.045 + solarDiffuse * 0.70;
 
-    //gl_FragDepth = 1.0f;
+    vec3 baseColor = ColorModulator.rgb * vertexColor.rgb;
+    float whitening = clamp(solarDiffuse * 0.22 + forwardScatter * 0.35, 0.0, 0.5);
+    vec3 scatteredColor = mix(baseColor, vec3(1.0), whitening) * illumination;
+    // Face centers stay clear; scattering is confined to grazing angles.
+    float alpha = clamp(pow(rim, 1.35) * (0.28 + illumination * 0.62)
+            + forwardScatter * 0.16, 0.0, 0.62)
+            * ColorModulator.a * vertexColor.a;
+    fragColor = vec4(max(scatteredColor, vec3(0.0)), alpha);
+    // Transparent shells must test against the same depth encoding as their planet.
+    float viewDepth = 1.0 / max(gl_FragCoord.w, 1.0e-7);
+    gl_FragDepth = clamp(1.0 - log2(1.0 + viewDepth) / 24.0, 0.0, 1.0);
 }

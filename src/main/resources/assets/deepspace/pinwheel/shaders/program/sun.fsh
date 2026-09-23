@@ -46,8 +46,9 @@ in vec2 texCoord0;
 
 out vec4 fragColor;
 void main() {
-    vec4 color = texture(Sampler0, texCoord0) * ColorModulator * (1 - linear_fog_fade(4000, 3900, vertexDistance));
-    //vec4 color = vec4(texCoord0.xy, 0, 1);
-    fragColor = color;
-    //gl_FragDepth = 1.0f;
+    // The neutral surface texture receives exactly one generated spectral-class tint.
+    vec4 surface = texture(Sampler0, texCoord0);
+    surface.rgb = mix(surface.rgb, vec3(1.0), 0.16);
+    // The stellar surface is an opaque occluder; distance must never reduce its alpha.
+    fragColor = vec4(surface.rgb * vertexColor.rgb * ColorModulator.rgb, 1.0);
 }

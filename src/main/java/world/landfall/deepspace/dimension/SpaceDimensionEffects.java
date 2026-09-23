@@ -11,6 +11,7 @@ import org.joml.Matrix4f;
 
 public class SpaceDimensionEffects extends DimensionSpecialEffects {
     public SpaceDimensionEffects() {
+        // Midnight hides BSL's directional sky sun; Deep Space supplies its physical point sun separately.
         super(-200, false, SkyType.NONE, false, true);
     }
 

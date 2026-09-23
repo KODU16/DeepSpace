@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "deepspace:block/star_bramble_empty_bottom"
+  },
+  "render_type": "minecraft:cutout"
+}

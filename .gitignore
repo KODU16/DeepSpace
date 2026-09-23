@@ -113,6 +113,13 @@ gradle-app.setting
 
 **/build/
 
+# Local release and asset snapshots are not project source.
+asset-backups/
+deploy-backups/
+
+# This source tree requires the bundled Sable API at compile time.
+!libs/sable-photomancy-1.0.0.jar
+
 # Common working directory
 run/
 runs/

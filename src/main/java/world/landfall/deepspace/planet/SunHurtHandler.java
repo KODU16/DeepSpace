@@ -17,13 +17,16 @@ public class SunHurtHandler {
     public static void serverPlayerTick(PlayerTickEvent.Post event) {
         if (event.getEntity().getServer() == null) return;
         var player = event.getEntity();
-        var sun = PlanetRegistry.getSun();
+        var galaxy = PlanetRegistry.getGalaxyByDimension(player.level().dimension());
         var dimension = player.level().dimension().location();
-        if (sun == null) return;
-        if (sun.isPlayerTouching(player) && dimension.equals(ResourceLocation.parse("deepspace:space"))) {
+        if (galaxy == null) return;
+        boolean touching = galaxy.suns().stream().anyMatch(sun -> sun.isPlayerTouching(player));
+        boolean inHeatRadius = galaxy.suns().stream()
+                .anyMatch(sun -> player.position().distanceTo(sun.getCenter()) <= sun.getHurtRadius());
+        if (touching && GalaxyDimensions.isGalaxy(dimension)) {
             player.hurt(player.damageSources().inFire(),Float.MAX_VALUE);
         }
-        if (player.position().distanceTo(sun.getCenter()) <= sun.getHurtRadius() && dimension.equals(ResourceLocation.parse("deepspace:space"))) {
+        if (inHeatRadius && GalaxyDimensions.isGalaxy(dimension)) {
             player.setRemainingFireTicks(20);
         }
     }

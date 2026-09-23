@@ -5,12 +5,30 @@
   "compatibilityLevel": "JAVA_8",
   "refmap": "deepspace.mixins.refmap.json",
   "mixins": [
+    "MixinEntityGravity",
+    "MixinAirCurrent",
+    "MixinGalaxyChunkMap",
     "MixinGameRenderer",
+    "MixinInfinityEffectGiver",
     "MixinLivingEntity"
   ],
   "client": [
+    "MixinClientPacketListenerTransitionScreen",
+    "MixinClientLevelSkyColor",
+    "MixinFogRendererPlanetSky",
     "MixinGameRenderer",
-    "MixinLivingEntity"
+    "MixinLivingEntity",
+    "MixinIrisCelestialUniforms",
+    "MixinIrisCommonUniforms",
+    "MixinIrisJcppProcessor",
+    "MixinIrisWorldTimeUniforms",
+    "MixinInfinitySkyRenderer",
+    "MixinLevelRendererSun",
+    "MixinLevelRendererClouds",
+    "MixinMinecraftTransitionScreen",
+    "MixinPhysicsStaffClientHandler",
+    "MixinXaeroMapProcessor",
+    "MixinVsieControlSeatHud"
   ],
   "injectors": {
     "defaultRequire": 1

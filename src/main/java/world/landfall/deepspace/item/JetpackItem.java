@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.ModAttatchments;
 import world.landfall.deepspace.ModKeyMappings;
+import world.landfall.deepspace.planet.GalaxyDimensions;
 
 import java.awt.*;
 import java.util.List;
@@ -68,7 +69,7 @@ public class JetpackItem extends Item implements Equipable {
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
         super.inventoryTick(stack, level, entity, slotId, isSelected);
 
-        var inSpace = level.dimension().location().equals(ResourceLocation.parse("deepspace:space"));
+        var inSpace = GalaxyDimensions.isGalaxy(level.dimension());
         if (!(entity instanceof Player player)) return;
 
         var tick = player.tickCount;

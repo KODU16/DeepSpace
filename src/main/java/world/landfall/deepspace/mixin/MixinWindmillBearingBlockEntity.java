@@ -19,20 +19,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Mixin(WindmillBearingBlockEntity.class)
+@SuppressWarnings("MixinObfuscation")
 public abstract class MixinWindmillBearingBlockEntity extends MechanicalBearingBlockEntity {
     @Unique
     private static Map<String, Float> atmosphereDensityMap = new HashMap<>();
 
     static {
         atmosphereDensityMap.put("deepspace:space", 0.05f);
-        atmosphereDensityMap.put("deepspace:luna", 0.1f);
         atmosphereDensityMap.put("deepspace:sarrion", 1.5f);
     }
 
-    @Shadow
+    @Shadow(remap = false)
     protected float lastGeneratedSpeed;
 
-    @Shadow
+    @Shadow(remap = false)
     protected abstract float getAngleSpeedDirection();
 
     public MixinWindmillBearingBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {

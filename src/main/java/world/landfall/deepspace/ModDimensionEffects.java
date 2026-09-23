@@ -19,6 +19,7 @@ import world.landfall.deepspace.dimension.SarrionDimensionEffects;
 import world.landfall.deepspace.dimension.SpaceDimensionEffects;
 import world.landfall.deepspace.dimension.SpaceDimensionType;
 
+@SuppressWarnings("removal") // NeoForge currently requires the deprecated MOD bus selector here.
 @EventBusSubscriber(modid = Deepspace.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ModDimensionEffects {
     public static DimensionSpecialEffects DEEPSPACE_EFFECTS = new SpaceDimensionEffects();

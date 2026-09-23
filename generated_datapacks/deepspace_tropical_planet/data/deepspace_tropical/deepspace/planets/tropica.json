@@ -1,0 +1,30 @@
+{
+  "id": "tropica",
+  "name": "Tropica",
+  "dimension": "tropicraft:tropics",
+  "boundingBoxMin": [
+    -2241.3203435596424,
+    80.0,
+    2001.3203435596424
+  ],
+  "boundingBoxMax": [
+    -2001.3203435596424,
+    320.0,
+    2241.3203435596424
+  ],
+  "decorations": [
+    {
+      "type": "atmosphere",
+      "scale": 1.1
+    }
+  ],
+  "physicalMin": [
+    -1000.0,
+    -1000.0
+  ],
+  "physicalMax": [
+    1000.0,
+    1000.0
+  ],
+  "description": "A humid tropical planet connected to the Tropicraft Tropics dimension"
+}

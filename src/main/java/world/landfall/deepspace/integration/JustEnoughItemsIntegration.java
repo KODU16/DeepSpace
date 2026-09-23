@@ -37,7 +37,8 @@ public class JustEnoughItemsIntegration implements IModPlugin {
     }
     private static ItemStack getJetHelmetWithOxygen(int oxygen) {
         var stack = ModItems.JET_HELMET_ITEM.toStack();
-        stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, new JetHelmetItem.JetHelmetComponent(oxygen, 100));
+        stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER,
+                JetHelmetItem.JetHelmetComponent.ofAmount(oxygen * 10, JetHelmetItem.OXYGEN_CAPACITY));
         return stack;
     }
 }

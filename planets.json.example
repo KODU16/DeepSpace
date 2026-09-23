@@ -4,33 +4,42 @@
       "id": "overworld",
       "name": "Overworld",
       "dimension": "minecraft:overworld",
-      "boundingBoxMin": [-1000.0, -1000.0, -1000.0],
-      "boundingBoxMax": [1000.0, 1000.0, 1000.0],
-      "description": "The main world where players spawn"
+      "boundingBoxMin": [2000.0, 100.0, -100.0],
+      "boundingBoxMax": [2200.0, 300.0, 100.0],
+      "decorations": [
+        {
+          "type": "atmosphere",
+          "scale": 1.1,
+          "color": -10832641
+        }
+      ],
+      "description": "An explicitly textured planet",
+      "physicalMin": [-1000.0, -1000.0],
+      "physicalMax": [1000.0, 1000.0],
+      "textures": [
+        "deepspace:textures/overworld_down.png",
+        "deepspace:textures/overworld_north.png",
+        "deepspace:textures/overworld_west.png",
+        "deepspace:textures/overworld_south.png",
+        "deepspace:textures/overworld_east.png",
+        "deepspace:textures/overworld_up.png"
+      ]
     },
     {
-      "id": "nether",
-      "name": "The Nether",
-      "dimension": "minecraft:the_nether",
-      "boundingBoxMin": [2000.0, -500.0, -1000.0],
-      "boundingBoxMax": [4000.0, 500.0, 1000.0],
-      "description": "A hellish dimension filled with lava and dangerous creatures"
-    },
-    {
-      "id": "end",
-      "name": "The End",
-      "dimension": "minecraft:the_end",
-      "boundingBoxMin": [-2000.0, 1000.0, -1000.0],
-      "boundingBoxMax": [0.0, 3000.0, 1000.0],
-      "description": "The final dimension, home to the Ender Dragon"
-    },
-    {
-      "id": "custom_planet",
-      "name": "Custom Planet",
-      "dimension": "modname:custom_dimension",
-      "boundingBoxMin": [5000.0, 0.0, -2000.0],
-      "boundingBoxMax": [7000.0, 2000.0, 0.0],
-      "description": "An example custom planet from another mod"
+      "id": "example_generated",
+      "name": "Generated Example",
+      "dimension": "example:generated_dimension",
+      "boundingBoxMin": [2500.0, 100.0, -100.0],
+      "boundingBoxMax": [2700.0, 300.0, 100.0],
+      "decorations": [],
+      "description": "No texture or atmosphere; its surface palette is generated automatically",
+      "physicalMin": [-1000.0, -1000.0],
+      "physicalMax": [1000.0, 1000.0]
     }
-  ]
-} 
+  ],
+  "sun": {
+    "boundingBoxMin": [-200.0, 0.0, -200.0],
+    "boundingBoxMax": [200.0, 400.0, 200.0],
+    "hurtRadius": 500.0
+  }
+}

@@ -61,11 +61,13 @@ uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
 uniform vec3 ChunkOffset;
 uniform int FogShape;
-uniform float Time;
+uniform vec3 SunPosition;
 
 out float vertexDistance;
 out vec4 vertexColor;
-out vec2 texCoord0;
+out vec3 atmosphereNormal;
+out vec3 viewDirection;
+out vec3 lightDirection;
 
 void main() {
     vec3 pos = Position + ChunkOffset + VeilCamera.CameraBobOffset;
@@ -74,6 +76,8 @@ void main() {
 
     vertexDistance = fog_distance(pos, FogShape);
     vertexColor = Color;
-    float scale = 1.0f;
-    texCoord0 = UV0 + Time / 320;
+    // All three vectors remain in camera-relative world space for stable distant lighting.
+    atmosphereNormal = normalize(Normal);
+    viewDirection = -pos;
+    lightDirection = SunPosition - pos;
 }

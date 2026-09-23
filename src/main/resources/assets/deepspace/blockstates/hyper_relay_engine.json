@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "powered=false": { "model": "deepspace:block/hyper_relay_engine" },
+    "powered=true": { "model": "deepspace:block/hyper_relay_engine" }
+  }
+}

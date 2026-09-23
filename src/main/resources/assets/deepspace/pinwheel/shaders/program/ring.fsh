@@ -62,6 +62,7 @@ void main() {
     vec4 color = vec4(1, 1, 1, value * noise_value1) * (1 - linear_fog_fade(4000, 3900, vertexDistance));
 
     fragColor = color * vertexColor * ColorModulator;
-
-    //gl_FragDepth = 1.0f;
+    // Forward logarithmic depth preserves physical near/far ordering across the galaxy view.
+    float viewDepth = 1.0 / max(gl_FragCoord.w, 1.0e-7);
+    gl_FragDepth = clamp(1.0 - log2(1.0 + viewDepth) / 24.0, 0.0, 1.0);
 }

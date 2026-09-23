@@ -9,3 +9,11 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
+
+// Reuse resolved modules and NeoForm assets unless dependency updates are explicitly requested.
+if (providers.gradleProperty('use_local_dependencies').map { it.toBoolean() }.getOrElse(true)) {
+    gradle.startParameter.offline = true
+}
+
+// Give IDE imports and generated artifacts a stable project identity.
+rootProject.name = 'DeepSpace_versionK'

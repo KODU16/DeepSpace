@@ -23,7 +23,7 @@ public class SodiumIntegration implements ConfigEntryPoint {
         var allowedValues = new HashSet<DeepspaceOptions.Detail>();
         allowedValues.addAll(Arrays.stream(DeepspaceOptions.Detail.values()).toList());
         builder.registerModOptions("deepspace")
-                .setIcon(Deepspace.path("textures/sarrion.png"))
+                .setIcon(Deepspace.path("textures/sun.png"))
                 .addPage(builder.createOptionPage()
                         .setName(Component.literal("Deepspace"))
                         .addOption(builder.createEnumOption(Deepspace.path("decoration_detail"), DeepspaceOptions.Detail.class)

@@ -1,0 +1,11 @@
+{
+  "type": "deepspace:airless",
+  "generator": {
+    "type": "minecraft:noise",
+    "settings": "deepspace:lithos",
+    "biome_source": {
+      "type": "minecraft:fixed",
+      "biome": "deepspace:lithos_barrens"
+    }
+  }
+}

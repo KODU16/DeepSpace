@@ -11,6 +11,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.planet.Planet;
+import world.landfall.deepspace.planet.Galaxy;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.planet.PlanetUtils;
 
@@ -34,6 +35,8 @@ public class PlanetCommand {
                 .executes(PlanetCommand::reloadPlanets))
             .then(Commands.literal("sync")
                 .executes(PlanetCommand::syncPlanets))
+            .then(Commands.literal("refresh_texture")
+                .executes(PlanetCommand::refreshTextures))
             .then(Commands.literal("info")
                 .executes(PlanetCommand::showPlayerPlanetInfo))
         );
@@ -44,14 +47,25 @@ public class PlanetCommand {
      */
     private static int listPlanets(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
-        Collection<Planet> planets = PlanetRegistry.getAllPlanets();
+        Galaxy currentGalaxy = resolveCurrentGalaxy(source);
+
+        if (currentGalaxy == null) {
+            source.sendSuccess(() -> Component.literal("The command source is not inside a registered galaxy."), false);
+            return 0;
+        }
+
+        Collection<Planet> planets = PlanetRegistry.getPlanetsForGalaxy(currentGalaxy.dimension());
         
         if (planets.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("No planets are currently registered."), false);
+            String galaxyName = currentGalaxy.name();
+            source.sendSuccess(() -> Component.literal("No planets are registered in " + galaxyName + "."), false);
             return 0;
         }
         
-        source.sendSuccess(() -> Component.literal("Registered planets (" + planets.size() + "):"), false);
+        String galaxyName = currentGalaxy.name();
+        source.sendSuccess(() -> Component.literal(
+                "Registered planets in " + galaxyName + " (" + planets.size() + "):"
+        ), false);
         
         for (Planet planet : planets) {
             Vec3 min = planet.getBoundingBoxMin();
@@ -71,6 +85,42 @@ public class PlanetCommand {
         
         return planets.size();
     }
+
+    /**
+     * Regenerates procedural planet textures for the galaxy containing the command source.
+     */
+    private static int refreshTextures(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Galaxy currentGalaxy = resolveCurrentGalaxy(source);
+        if (currentGalaxy == null) {
+            source.sendFailure(Component.literal("The command source is not inside a registered galaxy."));
+            return 0;
+        }
+
+        Collection<Planet> planets = PlanetRegistry.getPlanetsForGalaxy(currentGalaxy.dimension());
+        if (planets.isEmpty()) {
+            source.sendFailure(Component.literal("No planets are registered in " + currentGalaxy.name() + "."));
+            return 0;
+        }
+
+        PlanetRegistry.refreshGeneratedTextures(source.getServer(), planets);
+        source.sendSuccess(
+                () -> Component.literal("Refreshing textures for " + planets.size()
+                        + " planets in " + currentGalaxy.name() + "."),
+                true
+        );
+        return planets.size();
+    }
+
+    private static Galaxy resolveCurrentGalaxy(CommandSourceStack source) {
+        var currentDimension = source.getLevel().dimension();
+        Galaxy currentGalaxy = PlanetRegistry.getGalaxyByDimension(currentDimension);
+        if (currentGalaxy == null) {
+            Planet surface = PlanetRegistry.getPlanetByDimension(currentDimension);
+            currentGalaxy = surface == null ? null : PlanetRegistry.getGalaxyByDimension(surface.getGalaxy());
+        }
+        return currentGalaxy;
+    }
     
     /**
      * Reloads planets from the configuration file.
@@ -81,6 +131,7 @@ public class PlanetCommand {
         try {
             int oldCount = PlanetRegistry.getPlanetCount();
             PlanetRegistry.loadPlanets();
+            PlanetRegistry.refreshGeneratedTextures(source.getServer());
             int newCount = PlanetRegistry.getPlanetCount();
             
             // Sync to all players after reload

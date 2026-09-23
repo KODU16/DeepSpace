@@ -6,8 +6,13 @@
   "refmap": "deepspace.mixins.refmap.json",
   "mixins": [
     "MixinAirCurrent",
+    "MixinDisableInfinityBookPortals",
+    "MixinGalaxyChunkMap",
+    "MixinInfinityRandomDimension",
     "MixinWindmillBearingBlockEntity",
-    "MixinLivingEntity"
+    "MixinLivingEntity",
+    "MixinSubLevelHeatMapManager",
+    "SubLevelHeatMapManagerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

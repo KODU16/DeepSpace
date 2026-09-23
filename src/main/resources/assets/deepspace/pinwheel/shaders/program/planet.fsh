@@ -46,8 +46,11 @@ in vec2 texCoord0;
 
 out vec4 fragColor;
 void main() {
-    vec4 color = texture(Sampler0, texCoord0) * vertexColor * (1 - linear_fog_fade(4000, 3900, vertexDistance));
+    // Planet surfaces remain visible independently of the camera's world-fog distance.
+    vec4 color = texture(Sampler0, texCoord0) * vertexColor;
     //vec4 color = vec4(texCoord0.xy, 0, 1);
     fragColor = color;
-    //gl_FragDepth = 1.0f;
+    // Forward logarithmic depth preserves physical near/far ordering across the galaxy view.
+    float viewDepth = 1.0 / max(gl_FragCoord.w, 1.0e-7);
+    gl_FragDepth = clamp(1.0 - log2(1.0 + viewDepth) / 24.0, 0.0, 1.0);
 }

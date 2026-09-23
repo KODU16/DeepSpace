@@ -72,8 +72,9 @@ void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
     vertexDistance = fog_distance(pos, FogShape);
     //vertexDistance = 1.0f/0.0f;
-    float len = length(SunPosition);
-    vertexColor = Color * vec4(clamp(dot(normalize(SunPosition - pos), Normal) + .5f + (1.0 / (len * len)), .2f, 2));
+    // 朗伯光照：暗面接近夜侧，亮面不超过材质本身。
+    float ndotl = max(dot(normalize(SunPosition - pos), Normal), 0.0);
+    vertexColor = Color * vec4(vec3(0.045 + ndotl * 0.70), Color.a);
     // vertexColor = vec4(SunPosition.xyz, 1); # visualize position
     texCoord0 = UV0;
 }

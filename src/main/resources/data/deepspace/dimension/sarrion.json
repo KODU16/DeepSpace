@@ -1,13 +1,11 @@
 {
   "type": "deepspace:sarrion",
   "generator": {
-    "type": "minecraft:flat",
-    "settings": {
-      "biome": "minecraft:nether_wastes",
-      "lakes": false,
-      "features": false,
-      "layers": [],
-      "structure_overrides": []
-    }
+    "type": "minecraft:noise",
+    "biome_source": {
+      "type": "minecraft:multi_noise",
+      "preset": "minecraft:nether"
+    },
+    "settings": "deepspace:open_nether"
   }
 }

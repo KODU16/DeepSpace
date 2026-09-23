@@ -13,6 +13,7 @@ import org.joml.Vector2d;
 import world.landfall.deepspace.ModBlocks;
 import world.landfall.deepspace.block.GroundSolarPanelBlock;
 import world.landfall.deepspace.planet.PlanetRegistry;
+import world.landfall.deepspace.planet.GalaxyDimensions;
 
 public class GroundSolarPanelBlockEntity extends BlockEntity {
     private float angle;
@@ -31,8 +32,8 @@ public class GroundSolarPanelBlockEntity extends BlockEntity {
     public static void tick(Level level, BlockPos pos, BlockState state, GroundSolarPanelBlockEntity entity) {
         var angleDiff = entity.targetAngle - entity.angle;
         entity.angle = entity.angle + angleDiff * .1f;
-        if (level.dimension().location().equals(ResourceLocation.parse("deepspace:space"))) {
-            var sun = PlanetRegistry.getSun();
+        if (GalaxyDimensions.isGalaxy(level.dimension())) {
+            var sun = PlanetRegistry.getSunForGalaxy(level.dimension());
             if (sun == null) return;
             var sunPos = sun.getCenter();
             var blockPos = pos.getCenter();

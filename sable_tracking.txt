@@ -1,0 +1,1118 @@
+Compiled from "SubLevelTrackingSystem.java"
+public class dev.ryanhcode.sable.sublevel.system.SubLevelTrackingSystem implements dev.ryanhcode.sable.api.sublevel.SubLevelObserver {
+  private final net.minecraft.server.level.ServerLevel level;
+
+  private final java.util.List<dev.ryanhcode.sable.sublevel.SubLevel> additionQueue;
+
+  private final java.util.Set<java.util.UUID> currentlyUpdatingPlayers;
+
+  private final java.util.Set<java.util.UUID> pluginNeededPlayers;
+
+  private final java.util.List<dev.ryanhcode.sable.api.sublevel.SubLevelTrackingPlugin> plugins;
+
+  private int interpolationTick;
+
+  private long lastSendMs;
+
+  static final boolean $assertionsDisabled;
+
+  public dev.ryanhcode.sable.sublevel.system.SubLevelTrackingSystem(net.minecraft.server.level.ServerLevel);
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+       8: dup
+       9: invokespecial #9                  // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":()V
+      12: putfield      #10                 // Field additionQueue:Ljava/util/List;
+      15: aload_0
+      16: new           #16                 // class it/unimi/dsi/fastutil/objects/ObjectOpenHashSet
+      19: dup
+      20: invokespecial #18                 // Method it/unimi/dsi/fastutil/objects/ObjectOpenHashSet."<init>":()V
+      23: putfield      #19                 // Field currentlyUpdatingPlayers:Ljava/util/Set;
+      26: aload_0
+      27: new           #16                 // class it/unimi/dsi/fastutil/objects/ObjectOpenHashSet
+      30: dup
+      31: invokespecial #18                 // Method it/unimi/dsi/fastutil/objects/ObjectOpenHashSet."<init>":()V
+      34: putfield      #23                 // Field pluginNeededPlayers:Ljava/util/Set;
+      37: aload_0
+      38: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+      41: dup
+      42: invokespecial #9                  // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":()V
+      45: putfield      #26                 // Field plugins:Ljava/util/List;
+      48: aload_0
+      49: ldc2_w        #29                 // long -1l
+      52: putfield      #31                 // Field lastSendMs:J
+      55: aload_0
+      56: aload_1
+      57: putfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+      60: return
+
+  private static long getSubLevelLong(dev.ryanhcode.sable.sublevel.ServerSubLevel, dev.ryanhcode.sable.api.sublevel.SubLevelContainer);
+    Code:
+       0: aload_1
+       1: invokevirtual #39                 // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getOrigin:()Lorg/joml/Vector2i;
+       4: astore_2
+       5: aload_0
+       6: invokevirtual #45                 // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getPlot:()Ldev/ryanhcode/sable/sublevel/plot/ServerLevelPlot;
+       9: getfield      #51                 // Field dev/ryanhcode/sable/sublevel/plot/ServerLevelPlot.plotPos:Lnet/minecraft/world/level/ChunkPos;
+      12: astore_3
+      13: aload_3
+      14: getfield      #57                 // Field net/minecraft/world/level/ChunkPos.x:I
+      17: aload_2
+      18: getfield      #63                 // Field org/joml/Vector2i.x:I
+      21: isub
+      22: aload_3
+      23: getfield      #66                 // Field net/minecraft/world/level/ChunkPos.z:I
+      26: aload_2
+      27: getfield      #69                 // Field org/joml/Vector2i.y:I
+      30: isub
+      31: invokestatic  #72                 // Method net/minecraft/world/level/ChunkPos.asLong:(II)J
+      34: lreturn
+
+  private boolean shouldLoad(net.minecraft.world.entity.player.Player, org.joml.Vector3dc);
+    Code:
+       0: getstatic     #76                 // Field dev/ryanhcode/sable/SableConfig.SUB_LEVEL_TRACKING_RANGE:Lnet/neoforged/neoforge/common/ModConfigSpec$DoubleValue;
+       3: invokevirtual #82                 // Method net/neoforged/neoforge/common/ModConfigSpec$DoubleValue.getAsDouble:()D
+       6: dstore_3
+       7: aload_2
+       8: aload_1
+       9: invokevirtual #88                 // Method net/minecraft/world/entity/player/Player.getX:()D
+      12: aload_1
+      13: invokevirtual #93                 // Method net/minecraft/world/entity/player/Player.getY:()D
+      16: aload_1
+      17: invokevirtual #96                 // Method net/minecraft/world/entity/player/Player.getZ:()D
+      20: invokeinterface #99,  7           // InterfaceMethod org/joml/Vector3dc.distanceSquared:(DDD)D
+      25: dload_3
+      26: dload_3
+      27: dmul
+      28: dcmpg
+      29: ifge          36
+      32: iconst_1
+      33: goto          37
+      36: iconst_0
+      37: ireturn
+
+  public void onSubLevelAdded(dev.ryanhcode.sable.sublevel.SubLevel);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field additionQueue:Ljava/util/List;
+       4: aload_1
+       5: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      10: pop
+      11: return
+
+  public void onSubLevelRemoved(dev.ryanhcode.sable.sublevel.SubLevel, dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field additionQueue:Ljava/util/List;
+       4: aload_1
+       5: invokeinterface #111,  2          // InterfaceMethod java/util/List.remove:(Ljava/lang/Object;)Z
+      10: pop
+      11: aload_1
+      12: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+      15: astore_3
+      16: aload_0
+      17: aload_0
+      18: aload_3
+      19: invokevirtual #114                // Method serverWidePlayerSink:(Ldev/ryanhcode/sable/sublevel/ServerSubLevel;)Lfoundry/veil/api/network/VeilPacketManager$PacketSink;
+      22: aload_3
+      23: invokevirtual #118                // Method sendRemoval:(Lfoundry/veil/api/network/VeilPacketManager$PacketSink;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;)V
+      26: return
+
+  public foundry.veil.api.network.VeilPacketManager$PacketSink serverWidePlayerSink(dev.ryanhcode.sable.sublevel.ServerSubLevel);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokedynamic #122,  0            // InvokeDynamic #0:sendPacket:(Ldev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;)Lfoundry/veil/api/network/VeilPacketManager$PacketSink;
+       7: areturn
+
+  private void collectPlayers(org.joml.Vector3d, java.util.Collection<java.util.UUID>);
+    Code:
+       0: aload_0
+       1: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+       4: invokevirtual #126                // Method net/minecraft/server/level/ServerLevel.players:()Ljava/util/List;
+       7: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+      12: astore_3
+      13: aload_3
+      14: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      19: ifeq          61
+      22: aload_3
+      23: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      28: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+      31: astore        4
+      33: aload_0
+      34: aload         4
+      36: aload_1
+      37: invokevirtual #148                // Method shouldLoad:(Lnet/minecraft/world/entity/player/Player;Lorg/joml/Vector3dc;)Z
+      40: ifeq          58
+      43: aload_2
+      44: aload         4
+      46: invokevirtual #152                // Method net/minecraft/server/level/ServerPlayer.getGameProfile:()Lcom/mojang/authlib/GameProfile;
+      49: invokevirtual #156                // Method com/mojang/authlib/GameProfile.getId:()Ljava/util/UUID;
+      52: invokeinterface #162,  2          // InterfaceMethod java/util/Collection.add:(Ljava/lang/Object;)Z
+      57: pop
+      58: goto          13
+      61: return
+
+  private void sendFullSync(net.minecraft.server.level.ServerPlayer, dev.ryanhcode.sable.sublevel.ServerSubLevel, net.minecraft.network.protocol.common.custom.CustomPacketPayload);
+    Code:
+       0: aload_0
+       1: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+       4: invokestatic  #165                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getContainer:(Lnet/minecraft/server/level/ServerLevel;)Ldev/ryanhcode/sable/api/sublevel/ServerSubLevelContainer;
+       7: astore        4
+       9: getstatic     #169                // Field $assertionsDisabled:Z
+      12: ifne          28
+      15: aload         4
+      17: ifnonnull     28
+      20: new           #173                // class java/lang/AssertionError
+      23: dup
+      24: invokespecial #175                // Method java/lang/AssertionError."<init>":()V
+      27: athrow
+      28: aload_2
+      29: aload         4
+      31: invokestatic  #176                // Method getSubLevelLong:(Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)J
+      34: lstore        5
+      36: aload_2
+      37: invokevirtual #45                 // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getPlot:()Ldev/ryanhcode/sable/sublevel/plot/ServerLevelPlot;
+      40: astore        7
+      42: aload         7
+      44: invokevirtual #180                // Method dev/ryanhcode/sable/sublevel/plot/LevelPlot.getLoadedChunks:()Ljava/util/Collection;
+      47: astore        8
+      49: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+      52: dup
+      53: iconst_3
+      54: aload         8
+      56: invokeinterface #186,  1          // InterfaceMethod java/util/Collection.size:()I
+      61: iadd
+      62: invokespecial #190                // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":(I)V
+      65: astore        9
+      67: aload         9
+      69: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+      72: dup
+      73: new           #195                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundStartTrackingSubLevelPacket
+      76: dup
+      77: lload         5
+      79: aload_2
+      80: invokevirtual #197                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getUniqueId:()Ljava/util/UUID;
+      83: aload_2
+      84: invokevirtual #200                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.lastPose:()Ldev/ryanhcode/sable/companion/math/Pose3dc;
+      87: aload_2
+      88: invokevirtual #204                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+      91: aload         7
+      93: invokevirtual #208                // Method dev/ryanhcode/sable/sublevel/plot/LevelPlot.getBoundingBox:()Ldev/ryanhcode/sable/companion/math/BoundingBox3ic;
+      96: aload_2
+      97: invokevirtual #212                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getName:()Ljava/lang/String;
+     100: aload_0
+     101: getfield      #216                // Field interpolationTick:I
+     104: invokespecial #219                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundStartTrackingSubLevelPacket."<init>":(JLjava/util/UUID;Ldev/ryanhcode/sable/companion/math/Pose3dc;Ldev/ryanhcode/sable/companion/math/Pose3d;Ldev/ryanhcode/sable/companion/math/BoundingBox3ic;Ljava/lang/String;I)V
+     107: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     110: invokeinterface #225,  2          // InterfaceMethod it/unimi/dsi/fastutil/objects/ObjectList.add:(Ljava/lang/Object;)Z
+     115: pop
+     116: aload_3
+     117: ifnull        136
+     120: aload         9
+     122: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+     125: dup
+     126: aload_3
+     127: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     130: invokeinterface #225,  2          // InterfaceMethod it/unimi/dsi/fastutil/objects/ObjectList.add:(Ljava/lang/Object;)Z
+     135: pop
+     136: aload         8
+     138: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+     143: astore        10
+     145: aload         10
+     147: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     152: ifeq          195
+     155: aload         10
+     157: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     162: checkcast     #229                // class dev/ryanhcode/sable/sublevel/plot/PlotChunkHolder
+     165: astore        11
+     167: aload         9
+     169: dup
+     170: invokestatic  #231                // Method java/util/Objects.requireNonNull:(Ljava/lang/Object;)Ljava/lang/Object;
+     173: pop
+     174: invokedynamic #237,  0            // InvokeDynamic #1:accept:(Lit/unimi/dsi/fastutil/objects/ObjectList;)Ljava/util/function/Consumer;
+     179: aload         7
+     181: invokevirtual #241                // Method dev/ryanhcode/sable/sublevel/plot/LevelPlot.getLightEngine:()Lnet/minecraft/world/level/lighting/LevelLightEngine;
+     184: aload         11
+     186: invokevirtual #245                // Method dev/ryanhcode/sable/sublevel/plot/PlotChunkHolder.getChunk:()Lnet/minecraft/world/level/chunk/LevelChunk;
+     189: invokestatic  #249                // Method dev/ryanhcode/sable/sublevel/plot/SubLevelPlayerChunkSender.sendChunk:(Ljava/util/function/Consumer;Lnet/minecraft/world/level/lighting/LevelLightEngine;Lnet/minecraft/world/level/chunk/LevelChunk;)V
+     192: goto          145
+     195: aload         9
+     197: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+     200: dup
+     201: new           #255                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundFinalizeSubLevelPacket
+     204: dup
+     205: lload         5
+     207: invokespecial #257                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundFinalizeSubLevelPacket."<init>":(J)V
+     210: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     213: invokeinterface #225,  2          // InterfaceMethod it/unimi/dsi/fastutil/objects/ObjectList.add:(Ljava/lang/Object;)Z
+     218: pop
+     219: aload_1
+     220: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+     223: new           #264                // class net/minecraft/network/protocol/game/ClientboundBundlePacket
+     226: dup
+     227: aload         9
+     229: invokespecial #266                // Method net/minecraft/network/protocol/game/ClientboundBundlePacket."<init>":(Ljava/lang/Iterable;)V
+     232: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+     235: aload         8
+     237: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+     242: astore        10
+     244: aload         10
+     246: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     251: ifeq          281
+     254: aload         10
+     256: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     261: checkcast     #229                // class dev/ryanhcode/sable/sublevel/plot/PlotChunkHolder
+     264: astore        11
+     266: aload_0
+     267: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     270: aload         11
+     272: invokevirtual #245                // Method dev/ryanhcode/sable/sublevel/plot/PlotChunkHolder.getChunk:()Lnet/minecraft/world/level/chunk/LevelChunk;
+     275: invokestatic  #275                // Method dev/ryanhcode/sable/sublevel/plot/SubLevelPlayerChunkSender.sendChunkPoiData:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;)V
+     278: goto          244
+     281: return
+
+  private void sendRemoval(foundry.veil.api.network.VeilPacketManager$PacketSink, dev.ryanhcode.sable.sublevel.ServerSubLevel);
+    Code:
+       0: aload_0
+       1: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+       4: invokestatic  #165                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getContainer:(Lnet/minecraft/server/level/ServerLevel;)Ldev/ryanhcode/sable/api/sublevel/ServerSubLevelContainer;
+       7: astore_3
+       8: getstatic     #169                // Field $assertionsDisabled:Z
+      11: ifne          26
+      14: aload_3
+      15: ifnonnull     26
+      18: new           #173                // class java/lang/AssertionError
+      21: dup
+      22: invokespecial #175                // Method java/lang/AssertionError."<init>":()V
+      25: athrow
+      26: aload_2
+      27: aload_3
+      28: invokestatic  #176                // Method getSubLevelLong:(Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)J
+      31: lstore        4
+      33: aload_1
+      34: iconst_1
+      35: anewarray     #279                // class net/minecraft/network/protocol/common/custom/CustomPacketPayload
+      38: dup
+      39: iconst_0
+      40: new           #281                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundStopTrackingSubLevelPacket
+      43: dup
+      44: lload         4
+      46: invokespecial #283                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundStopTrackingSubLevelPacket."<init>":(J)V
+      49: aastore
+      50: invokeinterface #284,  2          // InterfaceMethod foundry/veil/api/network/VeilPacketManager$PacketSink.sendPacket:([Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+      55: return
+
+  public void tick(dev.ryanhcode.sable.api.sublevel.SubLevelContainer);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field additionQueue:Ljava/util/List;
+       4: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       9: astore_2
+      10: aload_2
+      11: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      16: ifeq          212
+      19: aload_2
+      20: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      25: checkcast     #289                // class dev/ryanhcode/sable/sublevel/SubLevel
+      28: astore_3
+      29: aload_3
+      30: invokevirtual #291                // Method dev/ryanhcode/sable/sublevel/SubLevel.isRemoved:()Z
+      33: ifeq          39
+      36: goto          10
+      39: aload_3
+      40: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+      43: astore        4
+      45: aload         4
+      47: invokevirtual #294                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getTrackingPlayers:()Ljava/util/Collection;
+      50: astore        5
+      52: aload_3
+      53: invokevirtual #297                // Method dev/ryanhcode/sable/sublevel/SubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+      56: invokevirtual #298                // Method dev/ryanhcode/sable/companion/math/Pose3d.position:()Lorg/joml/Vector3d;
+      59: astore        6
+      61: aload_0
+      62: aload         6
+      64: aload         5
+      66: invokevirtual #304                // Method collectPlayers:(Lorg/joml/Vector3d;Ljava/util/Collection;)V
+      69: aload         4
+      71: invokevirtual #308                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getSplitFromSubLevel:()Ljava/util/UUID;
+      74: astore        7
+      76: aload         7
+      78: ifnull        90
+      81: aload_1
+      82: aload         7
+      84: invokevirtual #311                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getSubLevel:(Ljava/util/UUID;)Ldev/ryanhcode/sable/sublevel/SubLevel;
+      87: goto          91
+      90: aconst_null
+      91: astore        8
+      93: aload         5
+      95: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+     100: astore        9
+     102: aload         9
+     104: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     109: ifeq          204
+     112: aload         9
+     114: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     119: checkcast     #315                // class java/util/UUID
+     122: astore        10
+     124: aload_0
+     125: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     128: aload         10
+     130: invokevirtual #317                // Method net/minecraft/server/level/ServerLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+     133: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     136: astore        11
+     138: aload         11
+     140: ifnonnull     154
+     143: new           #321                // class java/lang/IllegalStateException
+     146: dup
+     147: ldc_w         #323                // String Player not found immediately after tracking initializes
+     150: invokespecial #325                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+     153: athrow
+     154: aconst_null
+     155: astore        12
+     157: aload         7
+     159: ifnull        191
+     162: aload         8
+     164: ifnull        191
+     167: new           #328                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundRecentlySplitSubLevelPacket
+     170: dup
+     171: aload         4
+     173: invokevirtual #197                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getUniqueId:()Ljava/util/UUID;
+     176: aload         8
+     178: invokevirtual #330                // Method dev/ryanhcode/sable/sublevel/SubLevel.getUniqueId:()Ljava/util/UUID;
+     181: aload         4
+     183: invokevirtual #331                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getSplitFromPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+     186: invokespecial #334                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundRecentlySplitSubLevelPacket."<init>":(Ljava/util/UUID;Ljava/util/UUID;Ldev/ryanhcode/sable/companion/math/Pose3d;)V
+     189: astore        12
+     191: aload_0
+     192: aload         11
+     194: aload         4
+     196: aload         12
+     198: invokevirtual #337                // Method sendFullSync:(Lnet/minecraft/server/level/ServerPlayer;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     201: goto          102
+     204: aload         4
+     206: invokevirtual #341                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.clearSplitFrom:()V
+     209: goto          10
+     212: aload_0
+     213: getfield      #10                 // Field additionQueue:Ljava/util/List;
+     216: invokeinterface #344,  1          // InterfaceMethod java/util/List.clear:()V
+     221: aload_1
+     222: invokevirtual #347                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getAllSubLevels:()Ljava/util/List;
+     225: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     230: astore_2
+     231: aload_2
+     232: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     237: ifeq          501
+     240: aload_2
+     241: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     246: checkcast     #289                // class dev/ryanhcode/sable/sublevel/SubLevel
+     249: astore_3
+     250: aload_3
+     251: invokevirtual #291                // Method dev/ryanhcode/sable/sublevel/SubLevel.isRemoved:()Z
+     254: ifeq          260
+     257: goto          231
+     260: aload_3
+     261: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+     264: astore        4
+     266: aload         4
+     268: invokevirtual #294                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getTrackingPlayers:()Ljava/util/Collection;
+     271: astore        5
+     273: aload_3
+     274: invokevirtual #297                // Method dev/ryanhcode/sable/sublevel/SubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+     277: invokevirtual #298                // Method dev/ryanhcode/sable/companion/math/Pose3d.position:()Lorg/joml/Vector3d;
+     280: astore        6
+     282: aload         5
+     284: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+     289: astore        7
+     291: aload         7
+     293: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     298: ifeq          407
+     301: aload         7
+     303: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     308: checkcast     #315                // class java/util/UUID
+     311: astore        8
+     313: aload_0
+     314: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     317: aload         8
+     319: invokevirtual #317                // Method net/minecraft/server/level/ServerLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+     322: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     325: astore        9
+     327: aload         9
+     329: ifnonnull     375
+     332: aload_0
+     333: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     336: invokevirtual #350                // Method net/minecraft/server/level/ServerLevel.getServer:()Lnet/minecraft/server/MinecraftServer;
+     339: invokevirtual #354                // Method net/minecraft/server/MinecraftServer.getPlayerList:()Lnet/minecraft/server/players/PlayerList;
+     342: aload         8
+     344: invokevirtual #360                // Method net/minecraft/server/players/PlayerList.getPlayer:(Ljava/util/UUID;)Lnet/minecraft/server/level/ServerPlayer;
+     347: astore        10
+     349: aload         10
+     351: ifnull        365
+     354: aload_0
+     355: aload         10
+     357: invokestatic  #366                // InterfaceMethod foundry/veil/api/network/VeilPacketManager.player:(Lnet/minecraft/server/level/ServerPlayer;)Lfoundry/veil/api/network/VeilPacketManager$PacketSink;
+     360: aload         4
+     362: invokevirtual #118                // Method sendRemoval:(Lfoundry/veil/api/network/VeilPacketManager$PacketSink;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;)V
+     365: aload         7
+     367: invokeinterface #372,  1          // InterfaceMethod java/util/Iterator.remove:()V
+     372: goto          291
+     375: aload_0
+     376: aload         9
+     378: aload         6
+     380: invokevirtual #148                // Method shouldLoad:(Lnet/minecraft/world/entity/player/Player;Lorg/joml/Vector3dc;)Z
+     383: ifne          404
+     386: aload_0
+     387: aload         9
+     389: invokestatic  #366                // InterfaceMethod foundry/veil/api/network/VeilPacketManager.player:(Lnet/minecraft/server/level/ServerPlayer;)Lfoundry/veil/api/network/VeilPacketManager$PacketSink;
+     392: aload         4
+     394: invokevirtual #118                // Method sendRemoval:(Lfoundry/veil/api/network/VeilPacketManager$PacketSink;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;)V
+     397: aload         7
+     399: invokeinterface #372,  1          // InterfaceMethod java/util/Iterator.remove:()V
+     404: goto          291
+     407: aload_0
+     408: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     411: invokevirtual #126                // Method net/minecraft/server/level/ServerLevel.players:()Ljava/util/List;
+     414: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     419: astore        8
+     421: aload         8
+     423: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     428: ifeq          498
+     431: aload         8
+     433: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     438: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     441: astore        9
+     443: aload         9
+     445: invokevirtual #152                // Method net/minecraft/server/level/ServerPlayer.getGameProfile:()Lcom/mojang/authlib/GameProfile;
+     448: invokevirtual #156                // Method com/mojang/authlib/GameProfile.getId:()Ljava/util/UUID;
+     451: astore        10
+     453: aload_0
+     454: aload         9
+     456: aload         6
+     458: invokevirtual #148                // Method shouldLoad:(Lnet/minecraft/world/entity/player/Player;Lorg/joml/Vector3dc;)Z
+     461: ifeq          495
+     464: aload         5
+     466: aload         10
+     468: invokeinterface #374,  2          // InterfaceMethod java/util/Collection.contains:(Ljava/lang/Object;)Z
+     473: ifne          495
+     476: aload         5
+     478: aload         10
+     480: invokeinterface #162,  2          // InterfaceMethod java/util/Collection.add:(Ljava/lang/Object;)Z
+     485: pop
+     486: aload_0
+     487: aload         9
+     489: aload         4
+     491: aconst_null
+     492: invokevirtual #337                // Method sendFullSync:(Lnet/minecraft/server/level/ServerPlayer;Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     495: goto          421
+     498: goto          231
+     501: aload_0
+     502: aload_1
+     503: invokevirtual #377                // Method sendBoundsUpdates:(Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)V
+     506: aload_0
+     507: aload_1
+     508: invokevirtual #381                // Method sendMovementUpdates:(Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)V
+     511: return
+
+  private void sendBoundsUpdates(dev.ryanhcode.sable.api.sublevel.SubLevelContainer);
+    Code:
+       0: aload_1
+       1: invokevirtual #347                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getAllSubLevels:()Ljava/util/List;
+       4: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       9: astore_2
+      10: aload_2
+      11: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      16: ifeq          121
+      19: aload_2
+      20: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      25: checkcast     #289                // class dev/ryanhcode/sable/sublevel/SubLevel
+      28: astore_3
+      29: aload_3
+      30: invokevirtual #291                // Method dev/ryanhcode/sable/sublevel/SubLevel.isRemoved:()Z
+      33: ifeq          39
+      36: goto          10
+      39: aload_3
+      40: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+      43: astore        4
+      45: aload         4
+      47: invokevirtual #45                 // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getPlot:()Ldev/ryanhcode/sable/sublevel/plot/ServerLevelPlot;
+      50: invokevirtual #384                // Method dev/ryanhcode/sable/sublevel/plot/ServerLevelPlot.getBoundingBox:()Ldev/ryanhcode/sable/companion/math/BoundingBox3ic;
+      53: astore        5
+      55: aload         4
+      57: invokevirtual #385                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.lastNetworkedBoundingBox:()Ldev/ryanhcode/sable/companion/math/BoundingBox3i;
+      60: astore        6
+      62: aload         5
+      64: aload         6
+      66: invokeinterface #389,  2          // InterfaceMethod dev/ryanhcode/sable/companion/math/BoundingBox3ic.equals:(Ljava/lang/Object;)Z
+      71: ifne          118
+      74: aload         6
+      76: aload         5
+      78: invokevirtual #394                // Method dev/ryanhcode/sable/companion/math/BoundingBox3i.set:(Ldev/ryanhcode/sable/companion/math/BoundingBox3ic;)Ldev/ryanhcode/sable/companion/math/BoundingBox3i;
+      81: pop
+      82: aload         4
+      84: aload_1
+      85: invokestatic  #176                // Method getSubLevelLong:(Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)J
+      88: lstore        7
+      90: aload         4
+      92: invokevirtual #400                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.playerSink:()Lfoundry/veil/api/network/VeilPacketManager$PacketSink;
+      95: iconst_1
+      96: anewarray     #279                // class net/minecraft/network/protocol/common/custom/CustomPacketPayload
+      99: dup
+     100: iconst_0
+     101: new           #404                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundChangeBoundsSubLevelPacket
+     104: dup
+     105: lload         7
+     107: aload         5
+     109: invokespecial #406                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundChangeBoundsSubLevelPacket."<init>":(JLdev/ryanhcode/sable/companion/math/BoundingBox3ic;)V
+     112: aastore
+     113: invokeinterface #284,  2          // InterfaceMethod foundry/veil/api/network/VeilPacketManager$PacketSink.sendPacket:([Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     118: goto          10
+     121: return
+
+  public int getInterpolationTick();
+    Code:
+       0: aload_0
+       1: getfield      #216                // Field interpolationTick:I
+       4: ireturn
+
+  private void sendMovementUpdates(dev.ryanhcode.sable.api.sublevel.SubLevelContainer);
+    Code:
+       0: new           #409                // class it/unimi/dsi/fastutil/objects/Object2ObjectOpenHashMap
+       3: dup
+       4: invokespecial #411                // Method it/unimi/dsi/fastutil/objects/Object2ObjectOpenHashMap."<init>":()V
+       7: astore_2
+       8: aload_1
+       9: invokevirtual #347                // Method dev/ryanhcode/sable/api/sublevel/SubLevelContainer.getAllSubLevels:()Ljava/util/List;
+      12: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+      17: astore_3
+      18: aload_3
+      19: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      24: ifeq          231
+      27: aload_3
+      28: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      33: checkcast     #289                // class dev/ryanhcode/sable/sublevel/SubLevel
+      36: astore        4
+      38: aload         4
+      40: invokevirtual #291                // Method dev/ryanhcode/sable/sublevel/SubLevel.isRemoved:()Z
+      43: ifeq          49
+      46: goto          18
+      49: aload         4
+      51: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+      54: astore        5
+      56: aload         5
+      58: invokevirtual #294                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getTrackingPlayers:()Ljava/util/Collection;
+      61: astore        6
+      63: getstatic     #412                // Field dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType.MOVE:Ldev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType;
+      66: astore        7
+      68: aload         5
+      70: invokevirtual #204                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+      73: aload         5
+      75: invokevirtual #418                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.lastNetworkedPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+      78: ldc2_w        #421                // double 9.375E-4d
+      81: ldc2_w        #423                // double 0.015d
+      84: invokestatic  #425                // Method java/lang/Math.toRadians:(D)D
+      87: invokevirtual #431                // Method dev/ryanhcode/sable/companion/math/Pose3d.withinTolerance:(Ldev/ryanhcode/sable/companion/math/Pose3d;DD)Z
+      90: ifne          116
+      93: aload         5
+      95: invokevirtual #418                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.lastNetworkedPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+      98: aload         5
+     100: invokevirtual #204                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+     103: invokevirtual #435                // Method dev/ryanhcode/sable/companion/math/Pose3d.set:(Ldev/ryanhcode/sable/companion/math/Pose3dc;)Ldev/ryanhcode/sable/companion/math/Pose3d;
+     106: pop
+     107: aload         5
+     109: iconst_0
+     110: invokevirtual #438                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.setLastNetworkedStopped:(Z)V
+     113: goto          135
+     116: aload         5
+     118: invokevirtual #442                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getLastNetworkedStopped:()Z
+     121: ifne          18
+     124: getstatic     #445                // Field dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType.STOP:Ldev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType;
+     127: astore        7
+     129: aload         5
+     131: iconst_1
+     132: invokevirtual #438                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.setLastNetworkedStopped:(Z)V
+     135: aload         6
+     137: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+     142: astore        8
+     144: aload         8
+     146: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     151: ifeq          228
+     154: aload         8
+     156: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     161: checkcast     #315                // class java/util/UUID
+     164: astore        9
+     166: aload_0
+     167: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     170: aload         9
+     172: invokevirtual #317                // Method net/minecraft/server/level/ServerLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+     175: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     178: astore        10
+     180: aload         10
+     182: ifnonnull     188
+     185: goto          144
+     188: aload_2
+     189: aload         9
+     191: invokedynamic #448,  0            // InvokeDynamic #2:apply:()Ljava/util/function/Function;
+     196: invokeinterface #452,  3          // InterfaceMethod java/util/Map.computeIfAbsent:(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;
+     201: checkcast     #106                // class java/util/List
+     204: astore        11
+     206: aload         11
+     208: new           #458                // class dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket
+     211: dup
+     212: aload         5
+     214: aload         7
+     216: invokespecial #460                // Method dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket."<init>":(Ldev/ryanhcode/sable/sublevel/SubLevel;Ldev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType;)V
+     219: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+     224: pop
+     225: goto          144
+     228: goto          18
+     231: invokestatic  #463                // Method java/lang/System.currentTimeMillis:()J
+     234: lstore_3
+     235: aload_0
+     236: getfield      #31                 // Field lastSendMs:J
+     239: ldc2_w        #29                 // long -1l
+     242: lcmp
+     243: ifne          270
+     246: ldc2_w        #469                // double 1000.0d
+     249: aload_0
+     250: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     253: invokevirtual #350                // Method net/minecraft/server/level/ServerLevel.getServer:()Lnet/minecraft/server/MinecraftServer;
+     256: invokevirtual #471                // Method net/minecraft/server/MinecraftServer.tickRateManager:()Lnet/minecraft/server/ServerTickRateManager;
+     259: invokevirtual #475                // Method net/minecraft/server/ServerTickRateManager.tickrate:()F
+     262: f2d
+     263: ddiv
+     264: d2i
+     265: istore        5
+     267: goto          279
+     270: lload_3
+     271: aload_0
+     272: getfield      #31                 // Field lastSendMs:J
+     275: lsub
+     276: l2i
+     277: istore        5
+     279: aload_0
+     280: lload_3
+     281: putfield      #31                 // Field lastSendMs:J
+     284: aload_0
+     285: getfield      #23                 // Field pluginNeededPlayers:Ljava/util/Set;
+     288: invokeinterface #481,  1          // InterfaceMethod java/util/Set.clear:()V
+     293: aload_0
+     294: getfield      #26                 // Field plugins:Ljava/util/List;
+     297: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     302: astore        6
+     304: aload         6
+     306: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     311: ifeq          380
+     314: aload         6
+     316: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     321: checkcast     #484                // class dev/ryanhcode/sable/api/sublevel/SubLevelTrackingPlugin
+     324: astore        7
+     326: aload         7
+     328: invokeinterface #486,  1          // InterfaceMethod dev/ryanhcode/sable/api/sublevel/SubLevelTrackingPlugin.neededPlayers:()Ljava/lang/Iterable;
+     333: invokeinterface #490,  1          // InterfaceMethod java/lang/Iterable.iterator:()Ljava/util/Iterator;
+     338: astore        8
+     340: aload         8
+     342: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     347: ifeq          377
+     350: aload         8
+     352: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     357: checkcast     #315                // class java/util/UUID
+     360: astore        9
+     362: aload_0
+     363: getfield      #23                 // Field pluginNeededPlayers:Ljava/util/Set;
+     366: aload         9
+     368: invokeinterface #493,  2          // InterfaceMethod java/util/Set.add:(Ljava/lang/Object;)Z
+     373: pop
+     374: goto          340
+     377: goto          304
+     380: aload_0
+     381: getfield      #19                 // Field currentlyUpdatingPlayers:Ljava/util/Set;
+     384: aload_2
+     385: invokeinterface #494,  1          // InterfaceMethod java/util/Map.keySet:()Ljava/util/Set;
+     390: invokeinterface #498,  2          // InterfaceMethod java/util/Set.addAll:(Ljava/util/Collection;)Z
+     395: pop
+     396: aload_0
+     397: getfield      #19                 // Field currentlyUpdatingPlayers:Ljava/util/Set;
+     400: aload_0
+     401: getfield      #23                 // Field pluginNeededPlayers:Ljava/util/Set;
+     404: invokeinterface #498,  2          // InterfaceMethod java/util/Set.addAll:(Ljava/util/Collection;)Z
+     409: pop
+     410: aload_0
+     411: getfield      #19                 // Field currentlyUpdatingPlayers:Ljava/util/Set;
+     414: invokeinterface #502,  1          // InterfaceMethod java/util/Set.iterator:()Ljava/util/Iterator;
+     419: astore        6
+     421: aload         6
+     423: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     428: ifeq          568
+     431: aload         6
+     433: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     438: checkcast     #315                // class java/util/UUID
+     441: astore        7
+     443: aload_0
+     444: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     447: aload         7
+     449: invokevirtual #317                // Method net/minecraft/server/level/ServerLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+     452: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     455: astore        8
+     457: aload         8
+     459: ifnonnull     472
+     462: aload         6
+     464: invokeinterface #372,  1          // InterfaceMethod java/util/Iterator.remove:()V
+     469: goto          421
+     472: aload_2
+     473: aload         7
+     475: invokeinterface #503,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+     480: ifne          565
+     483: aload_0
+     484: getfield      #23                 // Field pluginNeededPlayers:Ljava/util/Set;
+     487: aload         7
+     489: invokeinterface #506,  2          // InterfaceMethod java/util/Set.contains:(Ljava/lang/Object;)Z
+     494: ifeq          529
+     497: aload         8
+     499: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+     502: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+     505: dup
+     506: new           #507                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket
+     509: dup
+     510: iload         5
+     512: aload_0
+     513: getfield      #216                // Field interpolationTick:I
+     516: iconst_0
+     517: invokespecial #509                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket."<init>":(IIZ)V
+     520: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     523: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+     526: goto          421
+     529: aload         8
+     531: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+     534: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+     537: dup
+     538: new           #507                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket
+     541: dup
+     542: iload         5
+     544: aload_0
+     545: getfield      #216                // Field interpolationTick:I
+     548: iconst_1
+     549: invokespecial #509                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket."<init>":(IIZ)V
+     552: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     555: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+     558: aload         6
+     560: invokeinterface #372,  1          // InterfaceMethod java/util/Iterator.remove:()V
+     565: goto          421
+     568: aload_0
+     569: getfield      #26                 // Field plugins:Ljava/util/List;
+     572: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     577: astore        7
+     579: aload         7
+     581: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     586: ifeq          615
+     589: aload         7
+     591: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     596: checkcast     #484                // class dev/ryanhcode/sable/api/sublevel/SubLevelTrackingPlugin
+     599: astore        8
+     601: aload         8
+     603: aload_0
+     604: getfield      #216                // Field interpolationTick:I
+     607: invokeinterface #512,  2          // InterfaceMethod dev/ryanhcode/sable/api/sublevel/SubLevelTrackingPlugin.sendTrackingData:(I)V
+     612: goto          579
+     615: aload_2
+     616: invokeinterface #515,  1          // InterfaceMethod java/util/Map.entrySet:()Ljava/util/Set;
+     621: invokeinterface #502,  1          // InterfaceMethod java/util/Set.iterator:()Ljava/util/Iterator;
+     626: astore        7
+     628: aload         7
+     630: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     635: ifeq          1199
+     638: aload         7
+     640: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     645: checkcast     #518                // class java/util/Map$Entry
+     648: astore        8
+     650: aload         8
+     652: invokeinterface #520,  1          // InterfaceMethod java/util/Map$Entry.getKey:()Ljava/lang/Object;
+     657: checkcast     #315                // class java/util/UUID
+     660: astore        9
+     662: aload_0
+     663: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     666: aload         9
+     668: invokevirtual #317                // Method net/minecraft/server/level/ServerLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+     671: checkcast     #146                // class net/minecraft/server/level/ServerPlayer
+     674: astore        10
+     676: aload         8
+     678: invokeinterface #523,  1          // InterfaceMethod java/util/Map$Entry.getValue:()Ljava/lang/Object;
+     683: checkcast     #106                // class java/util/List
+     686: astore        11
+     688: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+     691: dup
+     692: invokespecial #9                  // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":()V
+     695: astore        12
+     697: aload         11
+     699: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     704: astore        13
+     706: aload         13
+     708: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     713: ifeq          908
+     716: aload         13
+     718: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+     723: checkcast     #458                // class dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket
+     726: astore        14
+     728: aload         14
+     730: getfield      #526                // Field dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket.subLevels:Ldev/ryanhcode/sable/sublevel/SubLevel;
+     733: checkcast     #46                 // class dev/ryanhcode/sable/sublevel/ServerSubLevel
+     736: astore        15
+     738: aload         15
+     740: aload_1
+     741: invokestatic  #176                // Method getSubLevelLong:(Ldev/ryanhcode/sable/sublevel/ServerSubLevel;Ldev/ryanhcode/sable/api/sublevel/SubLevelContainer;)J
+     744: lstore        16
+     746: aload         14
+     748: getfield      #530                // Field dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket.type:Ldev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType;
+     751: invokevirtual #533                // Method dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem$SubLevelUpdateTicket$UpdateTicketType.ordinal:()I
+     754: lookupswitch  { // 2
+
+                     0: 780
+
+                     1: 807
+               default: 905
+          }
+     780: aload         10
+     782: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+     785: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+     788: dup
+     789: new           #536                // class dev/ryanhcode/sable/network/packets/tcp/ClientboundStopMovingSubLevelPacket
+     792: dup
+     793: lload         16
+     795: invokespecial #538                // Method dev/ryanhcode/sable/network/packets/tcp/ClientboundStopMovingSubLevelPacket."<init>":(J)V
+     798: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+     801: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+     804: goto          905
+     807: new           #539                // class org/joml/Vector3f
+     810: dup
+     811: aload         15
+     813: getfield      #541                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestLinearVelocity:Lorg/joml/Vector3d;
+     816: getfield      #545                // Field org/joml/Vector3d.x:D
+     819: d2f
+     820: aload         15
+     822: getfield      #541                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestLinearVelocity:Lorg/joml/Vector3d;
+     825: getfield      #550                // Field org/joml/Vector3d.y:D
+     828: d2f
+     829: aload         15
+     831: getfield      #541                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestLinearVelocity:Lorg/joml/Vector3d;
+     834: getfield      #552                // Field org/joml/Vector3d.z:D
+     837: d2f
+     838: invokespecial #554                // Method org/joml/Vector3f."<init>":(FFF)V
+     841: astore        18
+     843: new           #539                // class org/joml/Vector3f
+     846: dup
+     847: aload         15
+     849: getfield      #557                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestAngularVelocity:Lorg/joml/Vector3d;
+     852: getfield      #545                // Field org/joml/Vector3d.x:D
+     855: d2f
+     856: aload         15
+     858: getfield      #557                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestAngularVelocity:Lorg/joml/Vector3d;
+     861: getfield      #550                // Field org/joml/Vector3d.y:D
+     864: d2f
+     865: aload         15
+     867: getfield      #557                // Field dev/ryanhcode/sable/sublevel/ServerSubLevel.latestAngularVelocity:Lorg/joml/Vector3d;
+     870: getfield      #552                // Field org/joml/Vector3d.z:D
+     873: d2f
+     874: invokespecial #554                // Method org/joml/Vector3f."<init>":(FFF)V
+     877: astore        19
+     879: aload         12
+     881: new           #560                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket$Entry
+     884: dup
+     885: lload         16
+     887: aload         15
+     889: invokevirtual #204                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.logicalPose:()Ldev/ryanhcode/sable/companion/math/Pose3d;
+     892: aload         18
+     894: aload         19
+     896: invokespecial #562                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket$Entry."<init>":(JLdev/ryanhcode/sable/companion/math/Pose3d;Lorg/joml/Vector3fc;Lorg/joml/Vector3fc;)V
+     899: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+     904: pop
+     905: goto          706
+     908: bipush        16
+     910: istore        13
+     912: aload_0
+     913: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+     916: invokevirtual #350                // Method net/minecraft/server/level/ServerLevel.getServer:()Lnet/minecraft/server/MinecraftServer;
+     919: invokestatic  #565                // Method dev/ryanhcode/sable/network/udp/SableUDPServer.getServer:(Lnet/minecraft/server/MinecraftServer;)Ldev/ryanhcode/sable/network/udp/SableUDPServer;
+     922: astore        14
+     924: aload         14
+     926: ifnull        1062
+     929: aload         14
+     931: aload         10
+     933: invokevirtual #570                // Method dev/ryanhcode/sable/network/udp/SableUDPServer.isConnectedTo:(Lnet/minecraft/server/level/ServerPlayer;)Z
+     936: ifeq          1062
+     939: aload         12
+     941: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+     946: astore        15
+     948: aload         14
+     950: aload         10
+     952: new           #507                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket
+     955: dup
+     956: iload         5
+     958: aload_0
+     959: getfield      #216                // Field interpolationTick:I
+     962: iconst_0
+     963: invokespecial #509                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket."<init>":(IIZ)V
+     966: iconst_1
+     967: invokevirtual #574                // Method dev/ryanhcode/sable/network/udp/SableUDPServer.sendUDPPacket:(Lnet/minecraft/server/level/ServerPlayer;Ldev/ryanhcode/sable/network/udp/SableUDPPacket;Z)Z
+     970: pop
+     971: aload         15
+     973: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+     978: ifeq          1059
+     981: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+     984: dup
+     985: invokespecial #9                  // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":()V
+     988: astore        16
+     990: iconst_0
+     991: istore        17
+     993: iload         17
+     995: bipush        16
+     997: if_icmpge     1034
+    1000: aload         15
+    1002: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+    1007: ifeq          1034
+    1010: aload         16
+    1012: aload         15
+    1014: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+    1019: checkcast     #560                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket$Entry
+    1022: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+    1027: pop
+    1028: iinc          17, 1
+    1031: goto          993
+    1034: aload         14
+    1036: aload         10
+    1038: new           #578                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket
+    1041: dup
+    1042: aload_0
+    1043: getfield      #216                // Field interpolationTick:I
+    1046: aload         16
+    1048: invokespecial #580                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket."<init>":(ILjava/util/List;)V
+    1051: iconst_1
+    1052: invokevirtual #574                // Method dev/ryanhcode/sable/network/udp/SableUDPServer.sendUDPPacket:(Lnet/minecraft/server/level/ServerPlayer;Ldev/ryanhcode/sable/network/udp/SableUDPPacket;Z)Z
+    1055: pop
+    1056: goto          971
+    1059: goto          1196
+    1062: aload         12
+    1064: invokeinterface #132,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+    1069: astore        15
+    1071: aload         15
+    1073: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+    1078: ifeq          1196
+    1081: new           #7                  // class it/unimi/dsi/fastutil/objects/ObjectArrayList
+    1084: dup
+    1085: invokespecial #9                  // Method it/unimi/dsi/fastutil/objects/ObjectArrayList."<init>":()V
+    1088: astore        16
+    1090: iconst_0
+    1091: istore        17
+    1093: iload         17
+    1095: bipush        16
+    1097: if_icmpge     1134
+    1100: aload         15
+    1102: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+    1107: ifeq          1134
+    1110: aload         16
+    1112: aload         15
+    1114: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+    1119: checkcast     #560                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket$Entry
+    1122: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+    1127: pop
+    1128: iinc          17, 1
+    1131: goto          1093
+    1134: aload         10
+    1136: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+    1139: new           #264                // class net/minecraft/network/protocol/game/ClientboundBundlePacket
+    1142: dup
+    1143: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+    1146: dup
+    1147: new           #507                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket
+    1150: dup
+    1151: iload         5
+    1153: aload_0
+    1154: getfield      #216                // Field interpolationTick:I
+    1157: iconst_0
+    1158: invokespecial #509                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotInfoDualPacket."<init>":(IIZ)V
+    1161: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+    1164: new           #193                // class net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket
+    1167: dup
+    1168: new           #578                // class dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket
+    1171: dup
+    1172: aload_0
+    1173: getfield      #216                // Field interpolationTick:I
+    1176: aload         16
+    1178: invokespecial #580                // Method dev/ryanhcode/sable/network/packets/ClientboundSableSnapshotDualPacket."<init>":(ILjava/util/List;)V
+    1181: invokespecial #222                // Method net/minecraft/network/protocol/common/ClientboundCustomPayloadPacket."<init>":(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V
+    1184: invokestatic  #583                // InterfaceMethod java/util/List.of:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;
+    1187: invokespecial #266                // Method net/minecraft/network/protocol/game/ClientboundBundlePacket."<init>":(Ljava/lang/Iterable;)V
+    1190: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+    1193: goto          1071
+    1196: goto          628
+    1199: aload_0
+    1200: dup
+    1201: getfield      #216                // Field interpolationTick:I
+    1204: iconst_1
+    1205: iadd
+    1206: putfield      #216                // Field interpolationTick:I
+    1209: return
+
+  public void addTrackingPlugin(dev.ryanhcode.sable.api.sublevel.SubLevelTrackingPlugin);
+    Code:
+       0: aload_0
+       1: getfield      #26                 // Field plugins:Ljava/util/List;
+       4: aload_1
+       5: invokeinterface #587,  2          // InterfaceMethod java/util/List.contains:(Ljava/lang/Object;)Z
+      10: ifeq          14
+      13: return
+      14: aload_0
+      15: getfield      #26                 // Field plugins:Ljava/util/List;
+      18: aload_1
+      19: invokeinterface #105,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      24: pop
+      25: return
+
+  private static java.util.List lambda$sendMovementUpdates$1(java.util.UUID);
+    Code:
+       0: new           #588                // class java/util/ArrayList
+       3: dup
+       4: invokespecial #590                // Method java/util/ArrayList."<init>":()V
+       7: areturn
+
+  private void lambda$serverWidePlayerSink$0(dev.ryanhcode.sable.sublevel.ServerSubLevel, net.minecraft.network.protocol.Packet);
+    Code:
+       0: aload_1
+       1: invokevirtual #294                // Method dev/ryanhcode/sable/sublevel/ServerSubLevel.getTrackingPlayers:()Ljava/util/Collection;
+       4: invokeinterface #228,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+       9: astore_3
+      10: aload_3
+      11: invokeinterface #136,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      16: ifeq          67
+      19: aload_3
+      20: invokeinterface #142,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      25: checkcast     #315                // class java/util/UUID
+      28: astore        4
+      30: aload_0
+      31: getfield      #35                 // Field level:Lnet/minecraft/server/level/ServerLevel;
+      34: invokevirtual #350                // Method net/minecraft/server/level/ServerLevel.getServer:()Lnet/minecraft/server/MinecraftServer;
+      37: invokevirtual #354                // Method net/minecraft/server/MinecraftServer.getPlayerList:()Lnet/minecraft/server/players/PlayerList;
+      40: aload         4
+      42: invokevirtual #360                // Method net/minecraft/server/players/PlayerList.getPlayer:(Ljava/util/UUID;)Lnet/minecraft/server/level/ServerPlayer;
+      45: astore        5
+      47: aload         5
+      49: instanceof    #146                // class net/minecraft/server/level/ServerPlayer
+      52: ifeq          64
+      55: aload         5
+      57: getfield      #260                // Field net/minecraft/server/level/ServerPlayer.connection:Lnet/minecraft/server/network/ServerGamePacketListenerImpl;
+      60: aload_2
+      61: invokevirtual #269                // Method net/minecraft/server/network/ServerGamePacketListenerImpl.send:(Lnet/minecraft/network/protocol/Packet;)V
+      64: goto          10
+      67: return
+
+  static {};
+    Code:
+       0: ldc           #11                 // class dev/ryanhcode/sable/sublevel/system/SubLevelTrackingSystem
+       2: invokevirtual #591                // Method java/lang/Class.desiredAssertionStatus:()Z
+       5: ifne          12
+       8: iconst_1
+       9: goto          13
+      12: iconst_0
+      13: putstatic     #169                // Field $assertionsDisabled:Z
+      16: return
+}

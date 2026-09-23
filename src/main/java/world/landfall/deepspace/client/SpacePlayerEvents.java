@@ -2,7 +2,6 @@ package world.landfall.deepspace.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
@@ -18,15 +17,20 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.joml.Vector3f;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.ModAttatchments;
-import world.landfall.deepspace.ModDamageTypes;
 import world.landfall.deepspace.ModItems;
-import world.landfall.deepspace.item.JetHelmetItem;
 import world.landfall.deepspace.item.JetpackItem;
+import world.landfall.deepspace.physics.EntityGravityRegistry;
+import world.landfall.deepspace.physics.SpaceEnvironment;
 
 public class SpacePlayerEvents {
     @EventBusSubscriber(modid = Deepspace.MODID, value = Dist.CLIENT)
     public static class Tick {
-        private static void jetpackTick(Player player, Level level, ItemStack jetpack, boolean noGravity) {
+        private static void jetpackTick(
+                Player player,
+                Level level,
+                ItemStack jetpack,
+                boolean zeroGravity
+        ) {
             var hasJetpack = jetpack.is(ModItems.JETPACK_ITEM.get());
             if (!player.hasData(ModAttatchments.IS_FLYING_JETPACK)) return;
             var isFlying = player.getData(ModAttatchments.IS_FLYING_JETPACK.get());
@@ -41,7 +45,7 @@ public class SpacePlayerEvents {
             var jetpackComponent = jetpack.getComponents().get(JetpackItem.JetpackComponent.SUPPLIER.get());
             if (isFlying) {
                 player.getAbilities().flying = false;
-                if (noGravity)
+                if (zeroGravity)
                     player.setPose(Pose.FALL_FLYING);
                 if (player.isShiftKeyDown() || player.onGround()) {
                     player.setData(ModAttatchments.IS_FLYING_JETPACK, false);
@@ -68,7 +72,7 @@ public class SpacePlayerEvents {
                     rocketVelocity.y *= -1;
                 }
                 Vector3f newVelocity = new Vector3f(storedVelocity);
-                if (!noGravity) {
+                if (!zeroGravity) {
                     rocketVelocity.add(new Vector3f(0f, .04f, 0f)).mul(.1f, 2f, .1f);
                     newVelocity.add(0, -.06f, 0);
                 }
@@ -88,7 +92,10 @@ public class SpacePlayerEvents {
                 }
 
                 if (!keyPressed) {
-                    newVelocity.add(new Vector3f(0, -.01f, 0));
+                    // Let the entity gravity hook handle vertical acceleration.
+                    if (!zeroGravity) {
+                        newVelocity.add(new Vector3f(0, -.01f, 0));
+                    }
                     newVelocity.mul(.99f);
                 }
                 if (newVelocity.length() > 8) newVelocity.mul(.9f);
@@ -115,47 +122,16 @@ public class SpacePlayerEvents {
                 player.setData(ModAttatchments.JETPACK_VELOCITY, deltas.toVector3f());
             }
         }
-        private static void jetHelmetTick(Player player, Level level, ItemStack jetHelmet, boolean noGravity) {
-            var hasJetHelmet = jetHelmet.is(ModItems.JET_HELMET_ITEM.get());
-            var component = jetHelmet.getComponents().get(JetHelmetItem.JetHelmetComponent.SUPPLIER.get());
-            var isOxygenated = player.hasData(ModAttatchments.LAST_OXYGENATED) && player.getData(ModAttatchments.LAST_OXYGENATED) < 3;
-            var tick = player.tickCount;
-            if (component != null && noGravity && !player.isCreative() && !isOxygenated) {
-                player.setAirSupply(component.playerOxygen());
-                if (component.playerOxygen() < 1 && tick % 10 == 0)
-                    player.hurt(ModDamageTypes.noAirDamage(player), 1);
-            } else if (!hasJetHelmet && noGravity && !isOxygenated) {
-                player.setAirSupply(0);
-                if (tick % 10 == 0)
-                    player.hurt(ModDamageTypes.noAirDamage(player), 2);
-
-
-            }
-        }
-        private static void airTick(Player player, Level level, boolean noGravity) {
-            if (!noGravity) return;
-            var ticks = player.tickCount;
-            if (ticks % 20 != 0) return;
-        }
-
         @SubscribeEvent
         public static void playerTick(PlayerTickEvent.Post event) {
 
             Player player = event.getEntity();
             var dimension = player.level().dimension().location();
-            var noGravity = dimension.equals(ResourceLocation.parse("deepspace:space")) || dimension.equals(ResourceLocation.parse("deepspace:luna"));
-            player.setNoGravity(noGravity);
-            //player.setIgnoreFallDamageFromCurrentImpulse(noGravity);
-            if (noGravity && !player.getAbilities().flying) {
-                player.setDeltaMovement(player.getDeltaMovement().add(new Vec3(0, -.01f, 0)));
-            }
+            var zeroGravity = EntityGravityRegistry.isZeroGravityDimension(dimension.toString());
+            player.setNoGravity(zeroGravity);
+            //player.setIgnoreFallDamageFromCurrentImpulse(zeroGravity);
             var jetpackSlot = player.getItemBySlot(EquipmentSlot.CHEST);
-            var jetHelmetSlot = player.getItemBySlot(EquipmentSlot.HEAD);
-            jetpackTick(player, player.level(), jetpackSlot, noGravity);
-            jetHelmetTick(player, player.level(), jetHelmetSlot, noGravity);
-            airTick(player, player.level(), noGravity);
-            var lastOxygenated = player.getData(ModAttatchments.LAST_OXYGENATED);
-            player.setData(ModAttatchments.LAST_OXYGENATED, lastOxygenated + .05f);
+            jetpackTick(player, player.level(), jetpackSlot, zeroGravity);
         }
         private static float angle(float x, float y) {
             var rot = (float)Math.atan(y/x) / ((float)Math.PI*2) * 360;
@@ -167,12 +143,10 @@ public class SpacePlayerEvents {
         }
         @SubscribeEvent
         public static void fallEvent(LivingFallEvent event) {
-            ;
             if (event.getEntity() instanceof Player player) {
                 var dimension = player.level().dimension().location();
-                var noGravity = dimension.equals(ResourceLocation.parse("deepspace:space")) || dimension.equals(ResourceLocation.parse("deepspace:luna"));
-
-                event.setDistance(noGravity ? 0f : event.getDistance());
+                var zeroGravity = EntityGravityRegistry.isZeroGravityDimension(dimension.toString());
+                event.setDistance(zeroGravity ? 0f : event.getDistance());
             }
         }
         @SubscribeEvent

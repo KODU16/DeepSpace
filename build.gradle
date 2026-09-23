@@ -57,10 +57,14 @@ repositories {
         name "CaffeineMC"
         url "https://maven.caffeinemc.net/releases" // or /snapshots
     }
-    // define the local folder to search
-    // (this directory is relative to the project's root)
-    flatDir { dir 'libs' }
-
+    maven {
+        // GeckoLib provides the complete ring-world geometry renderer.
+        name = "GeckoLib"
+        url = "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"
+        content {
+            includeGroup("software.bernie.geckolib")
+        }
+    }
 }
 
 base {
@@ -148,12 +152,22 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
     implementation "foundry.veil:veil-neoforge-${project.minecraft_version}:${project.veil_version}"
+    // Iris is compile-only: the BSL integration mixins remain optional when shaders are absent.
+    compileOnly("maven.modrinth:iris:${project.iris_version}") {
+        transitive = false
+    }
     compileOnly ("net.caffeinemc:sodium-neoforge-api:0.8.12-beta.1+mc1.21.1")
     runtimeOnly ("net.caffeinemc:sodium-neoforge:0.8.12-beta.1+mc1.21.1")
     compileOnly "org.lwjgl:lwjgl:3.3.3"
 
-    implementation "blank:dimensional_sable:1.0.4"
+    // Cross-dimension ships are snapshotted and rebuilt through Photomancy's public blueprint API.
+    implementation files("libs/sable-photomancy-1.0.0.jar")
+    // Sable supplies the runtime sublevel tracking and entity projection APIs.
+    implementation("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}")
+    // Sable publishes Rapier as runtime-only, so validate and resolve it independently of compilation.
+    runtimeOnly("dev.ryanhcode.sable:sable-sable_rapier-${minecraft_version}:${sable_version}")
 
     // Create mod
     implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") {
@@ -182,11 +196,6 @@ dependencies {
     // compileOnly "mezz.jei:jei-${mc_version}-forge-api:${jei_version}"
     // runtimeOnly "mezz.jei:jei-${mc_version}-forge:${jei_version}"
 
-    // Example mod dependency using a mod jar from ./libs with a flat dir repository
-    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
-    // The group id is ignored when searching -- in this case, it is "blank"
-    // implementation "blank:coolmod-${mc_version}:${coolmod_version}"
-
     // Example mod dependency using a file as dependency
     // implementation files("libs/coolmod-${mc_version}-${coolmod_version}.jar")
 
@@ -211,7 +220,10 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
                              mod_license            : mod_license,
                              mod_version            : mod_version,
                              mod_authors            : mod_authors,
-                             mod_description        : mod_description]
+                             mod_credits            : mod_credits,
+                             mod_description        : mod_description,
+                             geckolib_version_range : geckolib_version_range,
+                             sable_version          : sable_version]
     inputs.properties replaceProperties
     expand replaceProperties
     from "src/main/templates"

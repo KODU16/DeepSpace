@@ -13,7 +13,6 @@ import com.simibubi.create.content.logistics.depot.DepotBlockEntity;
 import com.simibubi.create.foundation.data.CreateRegistrate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -31,35 +30,34 @@ import world.landfall.deepspace.item.JetHelmetItem;
 import java.util.List;
 
 public class CreateIntegration {
+    private static final int FAN_FILL_AMOUNT = 10;
+
+    private static void fillHelmet(ItemStack stack) {
+        var component = stack.get(JetHelmetItem.JetHelmetComponent.SUPPLIER);
+        if (component == null || component.infinite() || component.amount() >= component.capacity()) {
+            return;
+        }
+        // A Create air current condenses ambient air into DeepSpace's canonical oxygen fluid.
+        stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER,
+                component.withAmount(component.amount() + FAN_FILL_AMOUNT));
+    }
+
     public static void handleAir(List<Entity> entities, List<Pair<TransportedItemStackHandlerBehaviour, FanProcessingType>> handlers) {
         for (var x : handlers) {
             var behavior = x.getLeft().blockEntity.getBehaviour(DepotBehaviour.TYPE);
             if (behavior == null) continue;
             var stack = behavior.itemHandler.getStackInSlot(0);
-            if (stack.is(ModItems.JET_HELMET_ITEM)) {
-                var data = stack.get(JetHelmetItem.JetHelmetComponent.SUPPLIER);
-                if (data == null) continue;
-                if (data.maxOxygen() < 0 || data.currentOxygen() >= data.maxOxygen()) continue;
-                if (x.getLeft().getWorld().getBlockTicks().count() % 4 == 0)
-                    stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, new JetHelmetItem.JetHelmetComponent(data.currentOxygen()+1, data.maxOxygen()));
+            if (!x.getLeft().getWorld().isClientSide() && stack.is(ModItems.JET_HELMET_ITEM)
+                    && x.getLeft().getWorld().getGameTime() % 4 == 0) {
+                fillHelmet(stack);
             }
         }
         for (var x : entities) {
             if (x instanceof ItemEntity itemEntity) {
                 if (itemEntity.getItem().is(ModItems.JET_HELMET_ITEM.get())) {
-                    if (itemEntity.tickCount % 4 != 0) continue;
+                    if (itemEntity.level().isClientSide() || itemEntity.tickCount % 4 != 0) continue;
                     var item = itemEntity.getItem();
-                    var components = item.getComponents();
-                    if (!components.has(JetHelmetItem.JetHelmetComponent.SUPPLIER.get())) continue;
-                    var component = components.get(JetHelmetItem.JetHelmetComponent.SUPPLIER.get());
-                    if (component.maxOxygen() < 0 || component.currentOxygen() >= component.maxOxygen()) continue;
-
-                    item.applyComponents(DataComponentMap.builder()
-                                    .set(JetHelmetItem.JetHelmetComponent.SUPPLIER.get(), new JetHelmetItem.JetHelmetComponent(
-                                            component.currentOxygen()+1,
-                                            component.maxOxygen()
-                                    ))
-                            .build());
+                    fillHelmet(item);
                 }
             }
         }
@@ -90,9 +88,7 @@ public class CreateIntegration {
         public @Nullable List<ItemStack> process(ItemStack stack, Level level) {
             if (!stack.has(JetHelmetItem.JetHelmetComponent.SUPPLIER))
                 return List.of();
-            var component = stack.getComponents().get(JetHelmetItem.JetHelmetComponent.SUPPLIER.get());
-            var add = level.getBlockTicks().count() % 4 == 0 ? 1 : 0;
-            stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, new JetHelmetItem.JetHelmetComponent(component.currentOxygen() + add, component.maxOxygen()));
+            fillHelmet(stack);
             return List.of(
                 stack
             );

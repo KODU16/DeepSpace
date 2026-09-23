@@ -1,0 +1,16 @@
+{
+  "feature": {
+    "type": "deepspace:tagged_ore",
+    "config": {
+      "ore_tag": "c:ores",
+      "replaceable_tag": "minecraft:stone_ore_replaceables",
+      "size": 8,
+      "attempts": 1559
+    }
+  },
+  "placement": [
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

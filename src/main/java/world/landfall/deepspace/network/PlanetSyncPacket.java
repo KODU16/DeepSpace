@@ -1,6 +1,7 @@
 package world.landfall.deepspace.network;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -11,9 +12,11 @@ import org.slf4j.Logger;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
-import world.landfall.deepspace.planet.Sun;
+import world.landfall.deepspace.planet.Galaxy;
 import world.landfall.deepspace.render.PlanetDecorationsRenderer;
 import world.landfall.deepspace.render.PlanetRenderer;
+import world.landfall.deepspace.render.NightSkyPlanetRenderer;
+import world.landfall.deepspace.render.RingWorldRenderer;
 import world.landfall.deepspace.render.SunRenderer;
 
 import java.util.ArrayList;
@@ -24,7 +27,8 @@ import java.util.Objects;
 /**
  * Network packet for synchronizing planet data from server to client.
  */
-public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomPacketPayload {
+public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, String changedPlanetId)
+        implements CustomPacketPayload {
     
     private static final Logger LOGGER = LogUtils.getLogger();
     
@@ -42,8 +46,13 @@ public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomP
      *
      * @param planets The planets to sync
      */
-    public PlanetSyncPacket(@NotNull Collection<Planet> planets, Sun sun) {
-        this(new ArrayList<>(Objects.requireNonNull(planets, "Planets cannot be null")), Objects.requireNonNull(sun,"Sun cannot be null"));
+    public PlanetSyncPacket(@NotNull Collection<Planet> planets, @NotNull Collection<Galaxy> galaxies) {
+        this(new ArrayList<>(Objects.requireNonNull(planets, "Planets cannot be null")),
+                new ArrayList<>(Objects.requireNonNull(galaxies, "Galaxies cannot be null")), null);
+    }
+
+    public PlanetSyncPacket(@NotNull Planet planet) {
+        this(List.of(Objects.requireNonNull(planet, "Planet cannot be null")), List.of(), planet.getId());
     }
     
     /**
@@ -53,7 +62,12 @@ public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomP
      */
     @NotNull
     public static PlanetSyncPacket createSyncPacket() {
-        return new PlanetSyncPacket(PlanetRegistry.getAllPlanets(), PlanetRegistry.getSun());
+        return new PlanetSyncPacket(PlanetRegistry.getAllPlanets(), PlanetRegistry.getAllGalaxies());
+    }
+
+    /** Creates the minimal packet used when one generated texture has completed. */
+    public static PlanetSyncPacket createPlanetUpdatePacket(@NotNull Planet planet) {
+        return new PlanetSyncPacket(planet);
     }
     
     /**
@@ -70,7 +84,11 @@ public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomP
         for (Planet planet : packet.planets) {
             planet.toNetwork(buffer);
         }
-        packet.sun.toNetwork(buffer);
+        buffer.writeCollection(packet.galaxies, (target, galaxy) -> galaxy.toNetwork(target));
+        buffer.writeBoolean(packet.changedPlanetId != null);
+        if (packet.changedPlanetId != null) {
+            buffer.writeUtf(packet.changedPlanetId);
+        }
     }
     
     /**
@@ -89,9 +107,9 @@ public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomP
         for (int i = 0; i < planetCount; i++) {
             planets.add(Planet.fromNetwork(buffer));
         }
-        Sun sun = Sun.fromNetwork(buffer);
-        
-        return new PlanetSyncPacket(planets, sun);
+        List<Galaxy> galaxies = buffer.readList(Galaxy::fromNetwork);
+        String changedPlanetId = buffer.readBoolean() ? buffer.readUtf() : null;
+        return new PlanetSyncPacket(planets, galaxies, changedPlanetId);
     }
     
     /**
@@ -104,18 +122,31 @@ public record PlanetSyncPacket(List<Planet> planets, Sun sun) implements CustomP
         Objects.requireNonNull(context, "Context cannot be null");
         
         context.enqueueWork(() -> {
-            // Clear existing planets and load the synced ones
-            PlanetRegistry.clear();
-            
-            for (Planet planet : packet.planets) {
-                PlanetRegistry.registerPlanet(planet);
+            // The integrated server shares this registry; replacing its planets detaches active sampling jobs.
+            // Local packets only refresh rendering so completed maps remain on the authoritative objects.
+            if (packet.changedPlanetId != null) {
+                if (Minecraft.getInstance().getSingleplayerServer() == null && !packet.planets.isEmpty()) {
+                    PlanetRegistry.replacePlanet(packet.planets.getFirst());
+                }
+                PlanetRenderer.refreshPlanet(packet.changedPlanetId);
+            } else if (Minecraft.getInstance().getSingleplayerServer() == null) {
+                PlanetRegistry.clear();
+                for (Galaxy galaxy : packet.galaxies) {
+                    PlanetRegistry.registerGalaxy(galaxy);
+                }
+                for (Planet planet : packet.planets) {
+                    PlanetRegistry.registerPlanet(planet);
+                }
             }
             LOGGER.info("Synchronized {} planets from server", packet.planets.size());
-            PlanetRegistry.setSun(packet.sun);
-            LOGGER.info("Synchronized sun from server");
-            PlanetRenderer.refreshMeshes();
-            PlanetDecorationsRenderer.refreshMeshes();
-            SunRenderer.refreshMeshes();
+            LOGGER.info("Synchronized {} galaxies from server", packet.galaxies.size());
+            if (packet.changedPlanetId == null) {
+                PlanetRenderer.refreshMeshes();
+                NightSkyPlanetRenderer.refreshMeshes();
+                PlanetDecorationsRenderer.refreshMeshes();
+                SunRenderer.refreshMeshes();
+                RingWorldRenderer.refreshMeshes();
+            }
         });
     }
     

@@ -18,17 +18,32 @@ public class Sun {
         instance.group(
             Vec3.CODEC.fieldOf("boundingBoxMin").forGetter(Sun::getBoundingBoxMin),
             Vec3.CODEC.fieldOf("boundingBoxMax").forGetter(Sun::getBoundingBoxMax),
-            Codec.DOUBLE.fieldOf("hurtRadius").forGetter(Sun::getHurtRadius)
+            Codec.DOUBLE.fieldOf("hurtRadius").forGetter(Sun::getHurtRadius),
+            Codec.STRING.optionalFieldOf("name", "Sun").forGetter(Sun::getName),
+            Codec.STRING.optionalFieldOf("stage", "G").forGetter(Sun::getStage),
+            Codec.INT.optionalFieldOf("color", 0xFFFFFF).forGetter(Sun::getColor)
         ).apply(instance, Sun::new)
     );
     private final Vec3 boundingBoxMin;
     private final Vec3 boundingBoxMax;
     private final double hurtRadius;
+    private final String name;
+    private final String stage;
+    private final int color;
 
     public Sun(@NotNull Vec3 _boundingBoxMin, @NotNull Vec3 _boundingBoxMax, double _hurtRadius) {
+        this(_boundingBoxMin, _boundingBoxMax, _hurtRadius, "Sun", "G", 0xFFFFFF);
+    }
+
+    /** Creates a star with an explicit generated name, spectral class and visual tint. */
+    public Sun(@NotNull Vec3 _boundingBoxMin, @NotNull Vec3 _boundingBoxMax, double _hurtRadius,
+               @NotNull String name, @NotNull String stage, int color) {
         boundingBoxMin = Objects.requireNonNull(_boundingBoxMin);
         boundingBoxMax = Objects.requireNonNull(_boundingBoxMax);
         hurtRadius = _hurtRadius;
+        this.name = Objects.requireNonNull(name);
+        this.stage = Objects.requireNonNull(stage);
+        this.color = color & 0xFFFFFF;
         if (boundingBoxMin.x > boundingBoxMax.x || boundingBoxMin.y > boundingBoxMax.y || boundingBoxMin.z > boundingBoxMax.z) {
             throw new IllegalArgumentException("Invalid bounding box: minimum coordinates must be less than maximum coordinates");
         }
@@ -44,6 +59,34 @@ public class Sun {
 
     public double getHurtRadius() {
         return hurtRadius;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    /** Returns the same physical star with a display name assigned by its galaxy. */
+    public Sun withName(@NotNull String displayName) {
+        return new Sun(boundingBoxMin, boundingBoxMax, hurtRadius, displayName, stage, color);
+    }
+
+    /** Returns the cubic model radius used by generated spectral size labels. */
+    public double getModelRadius() {
+        Vec3 size = boundingBoxMax.subtract(boundingBoxMin);
+        return Math.max(size.x, Math.max(size.y, size.z)) * 0.5;
+    }
+
+    public String getStage() {
+        return stage;
+    }
+
+    /** Returns the generated O/B/A/F/G/K/M spectral classification. */
+    public String getSpectralClass() {
+        return stage;
+    }
+
+    public int getColor() {
+        return color;
     }
     /**
      * Checks if a given position is within this planet's bounding box.
@@ -67,7 +110,7 @@ public class Sun {
         //return isWithinBounds(player.position()) || isWithinBounds(player.position().add(0, 2, 0));
         Objects.requireNonNull(player);
         var level = player.level();
-        if (!level.dimension().location().equals(ResourceLocation.parse("deepspace:space")))
+        if (!GalaxyDimensions.isGalaxy(level.dimension()))
             return false;
         var position = player.position();
         return position.x >= boundingBoxMin.x - .5 && position.x <= boundingBoxMax.x + .5 &&
@@ -96,6 +139,9 @@ public class Sun {
         buffer.writeDouble(boundingBoxMax.y);
         buffer.writeDouble(boundingBoxMax.z);
         buffer.writeDouble(hurtRadius);
+        buffer.writeUtf(name);
+        buffer.writeUtf(stage);
+        buffer.writeInt(color);
     }
     /**
      * Reads a planet from a network buffer.
@@ -109,7 +155,7 @@ public class Sun {
         Vec3 boundingBoxMin = new Vec3(buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
         Vec3 boundingBoxMax = new Vec3(buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
         double hurtRadius = buffer.readDouble();
-        return new Sun(boundingBoxMin, boundingBoxMax, hurtRadius);
+        return new Sun(boundingBoxMin, boundingBoxMax, hurtRadius, buffer.readUtf(), buffer.readUtf(), buffer.readInt());
     }
     @Override
     public boolean equals(Object obj) {

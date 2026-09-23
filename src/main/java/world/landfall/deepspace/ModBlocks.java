@@ -13,6 +13,8 @@ import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -34,6 +36,10 @@ public class ModBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(Deepspace.MODID);
     public static final DeferredBlock<Block> ANGEL_BLOCK = BLOCKS.register("angel_block", () -> new AngelBlock(BlockBehaviour.Properties.of()));
     public static final DeferredBlock<Block> OXYGENATOR_BLOCK = BLOCKS.register("oxygenator", OxygenatorBlock::new);
+    public static final DeferredBlock<LiquidBlock> OXYGEN = BLOCKS.register("oxygen", () ->
+            new LiquidBlock(ModFluids.OXYGEN.get(), BlockBehaviour.Properties.ofFullCopy(Blocks.WATER)
+                    .mapColor(MapColor.COLOR_LIGHT_BLUE)
+                    .noLootTable()));
     public static final DeferredBlock<Block> GROUND_SOLAR_PANEL_BLOCK = BLOCKS.register("ground_solar_panel", GroundSolarPanelBlock::new);
     public static final DeferredBlock<Block> MOONSTONE_ZINC_ORE_BLOCK = BLOCKS.register("moonstone_zinc_ore_block", () -> new MoonstoneOreBlock(AllItems.RAW_ZINC));
     public static final DeferredBlock<Block> MOONSTONE_QUARTZ_ORE_BLOCK = BLOCKS.register("moonstone_quartz_ore_block", () -> new MoonstoneOreBlock(() -> Items.QUARTZ));
@@ -45,6 +51,11 @@ public class ModBlocks {
             .destroyTime(4)
             .isRedstoneConductor((state, getter, pos) -> true)
     ));
+    // Temporary iron-block presentation; the block only reacts to redstone on a Sable sub-level.
+    public static final DeferredBlock<Block> HYPER_RELAY_ENGINE_BLOCK = BLOCKS.register(
+            "hyper_relay_engine",
+            () -> new HyperRelayEngineBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK))
+    );
     public static final DeferredBlock<Block> LUNAR_SOIL = BLOCKS.register("lunar_soil", () -> new LunarSoilBlock(BlockBehaviour.Properties.of()
             .strength(1, 1)
             .sound(SoundType.SAND)
@@ -61,6 +72,8 @@ public class ModBlocks {
             .sound(SoundType.STONE)
             .mapColor(MapColor.COLOR_GRAY)
     ));
+    public static final DeferredBlock<LushPlantBlock> STAR_BRAMBLE = BLOCKS.register("star_bramble", () -> new LushPlantBlock(
+            BlockBehaviour.Properties.of().requiresCorrectToolForDrops()));
 
     public static final DeferredBlock<Block> PICKLE_VINE_BLOCK = makeUnstablePickleBlock("pickle_vine_block", BlockBehaviour.Properties.of()
 
@@ -166,3 +179,5 @@ public class ModBlocks {
         BLOCKS.register(eventBus);
     }
 }
+
+

@@ -5,6 +5,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -25,7 +26,8 @@ import world.landfall.deepspace.dimension.SpaceDimensionType;
 import world.landfall.deepspace.integration.CreateIntegration;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.render.SpaceRenderSystem;
-import world.landfall.deepspace.worldgen.ModPlacedFeatures;
+import world.landfall.deepspace.worldgen.ModChunkGenerators;
+import world.landfall.deepspace.worldgen.ModFeatures;
 
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -44,8 +46,13 @@ public class Deepspace {
                 output.accept(ModItems.JET_HELMET_ITEM);
                 output.accept(ModItems.CREATIVE_JET_HELMET_ITEM.get());
                 output.accept(ModItems.ROCKET_BOOSTER_ITEM);
+                output.accept(ModItems.DEEPSPACE_TERMINAL_ITEM);
                 output.accept(ModItems.ANGEL_BLOCK_ITEM);
                 output.accept(ModItems.OXYGENATOR_BLOCK_ITEM);
+                output.accept(ModItems.OXYGEN_BUCKET);
+                // Include the plant and its produce in the creative tab.
+                output.accept(ModItems.STAR_BRAMBLE_ITEM);
+                output.accept(ModItems.STARBULB_ITEM);
             })
             .icon(ModItems.ANGEL_BLOCK_ITEM::toStack)
             .title(Component.translatable("menu.deepspace.creative_mode_tab"))
@@ -67,6 +74,8 @@ public class Deepspace {
             LOGGER.error("Failed to register space dimension", e);
             throw new RuntimeException("Failed to initialize mod", e);
         }
+        // Fluids must be registered before their block and bucket suppliers are resolved.
+        ModFluids.register(modEventBus);
         // Register the Deferred Register to the mod event bus so blocks get registered
         ModBlocks.register(modEventBus);
         // Register the Deferred Register to the mod event bus so items get registered
@@ -75,6 +84,10 @@ public class Deepspace {
         ModItems.register(modEventBus);
         ModBlockEntities.register(modEventBus);
         ModAttatchments.register(modEventBus);
+        // Dimension generator codecs must exist before level stems are decoded.
+        ModChunkGenerators.register(modEventBus);
+        // Custom worldgen features must be registered before datapack worldgen entries are decoded.
+        ModFeatures.register(modEventBus);
 
         CreateIntegration.register(modEventBus);
         // Register the Deferred Register to the mod event bus so tabs get registered
@@ -129,8 +142,13 @@ public class Deepspace {
         public static void onClientSetup(FMLClientSetupEvent event) {
             // Initialize client events
             LOGGER.info("Deep Space mod client initialized");
-            SpaceRenderSystem.init();
-            LOGGER.info("Initialized renderers");
+            // Client setup is dispatched in parallel, so render resources must be initialized on the client thread.
+            event.enqueueWork(() -> {
+                SpaceRenderSystem.init();
+                LOGGER.info("Initialized renderers");
+            });
         }
     }
 }
+
+

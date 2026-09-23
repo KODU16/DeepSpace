@@ -9,6 +9,7 @@ import world.landfall.deepspace.Deepspace;
 /**
  * Handles network packet registration and management
  */
+@SuppressWarnings("removal") // NeoForge currently requires the deprecated MOD bus selector here.
 @EventBusSubscriber(modid = Deepspace.MODID, bus = EventBusSubscriber.Bus.MOD)
 public class NetworkHandler {
     
@@ -19,13 +20,43 @@ public class NetworkHandler {
      */
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1");
+        PayloadRegistrar registrar = event.registrar("2");
         
         // Register planet sync packet
         registrar.playToClient(
             PlanetSyncPacket.TYPE,
             PlanetSyncPacket.STREAM_CODEC,
             PlanetSyncPacket::handle
+        );
+        registrar.playToClient(
+                SkyTransitionPacket.TYPE,
+                SkyTransitionPacket.STREAM_CODEC,
+                SkyTransitionPacket::handle
+        );
+        registrar.playToClient(
+                SeamlessTransitionPacket.TYPE,
+                SeamlessTransitionPacket.STREAM_CODEC,
+                SeamlessTransitionPacket::handle
+        );
+        registrar.playToClient(
+                GalaxyArrivalPacket.TYPE,
+                GalaxyArrivalPacket.STREAM_CODEC,
+                GalaxyArrivalPacket::handle
+        );
+        registrar.playToClient(
+                StarMapOpenPacket.TYPE,
+                StarMapOpenPacket.STREAM_CODEC,
+                StarMapOpenPacket::handle
+        );
+        registrar.playToClient(
+                SubLevelTransferProbePacket.TYPE,
+                SubLevelTransferProbePacket.STREAM_CODEC,
+                SubLevelTransferProbePacket::handle
+        );
+        registrar.playToServer(
+                SubLevelTransferProbeReplyPacket.TYPE,
+                SubLevelTransferProbeReplyPacket.STREAM_CODEC,
+                SubLevelTransferProbeReplyPacket::handle
         );
         registrar.playToServer(
                 JetpackPacket.RocketForward.TYPE,
@@ -36,6 +67,16 @@ public class NetworkHandler {
                 JetpackPacket.BeginFlying.TYPE,
                 JetpackPacket.BeginFlying.STREAM_CODEC,
                 JetpackPacket.BeginFlying::handle
+        );
+        registrar.playToServer(
+                HyperRelayJumpRequestPacket.TYPE,
+                HyperRelayJumpRequestPacket.STREAM_CODEC,
+                HyperRelayJumpRequestPacket::handle
+        );
+        registrar.playToClient(
+                HyperRelayJumpStatusPacket.TYPE,
+                HyperRelayJumpStatusPacket.STREAM_CODEC,
+                HyperRelayJumpStatusPacket::handle
         );
     }
 } 

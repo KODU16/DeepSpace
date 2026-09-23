@@ -83,6 +83,20 @@ public final class PlanetUtils {
             .min()
             .orElse(Double.MAX_VALUE);
     }
+
+    /** Returns the nearest body rendered in the supplied galaxy dimension. */
+    @Nullable
+    public static Planet getNearestPlanet(@NotNull ResourceKey<Level> galaxy, @NotNull Vec3 position) {
+        Objects.requireNonNull(galaxy, "Galaxy cannot be null");
+        Objects.requireNonNull(position, "Position cannot be null");
+        return PlanetRegistry.getAllPlanets().stream()
+                .filter(planet -> planet.getGalaxy().equals(galaxy))
+                .min((first, second) -> Double.compare(
+                        position.distanceTo(first.getCenter()),
+                        position.distanceTo(second.getCenter())
+                ))
+                .orElse(null);
+    }
     
     /**
      * Gets the nearest planet to a given position.
