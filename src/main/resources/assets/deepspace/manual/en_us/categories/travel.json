@@ -1,0 +1,11 @@
+{
+  "name": "Interstellar Travel",
+  "description": "Relays, engines, and transitions",
+  "icon": "relay",
+  "sortnum": 3,
+  "manual_entries": [
+    "relay",
+    "engine",
+    "transitions"
+  ]
+}

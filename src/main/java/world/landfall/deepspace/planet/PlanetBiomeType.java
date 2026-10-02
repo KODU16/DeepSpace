@@ -1,6 +1,8 @@
 package world.landfall.deepspace.planet;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /** Collapses concrete vanilla and modded biome IDs into translated planet-name categories. */
 public final class PlanetBiomeType {
@@ -36,6 +38,28 @@ public final class PlanetBiomeType {
         if (containsAny(path, "forest", "woodland", "woods", "grove")) return "forest";
         if (containsAny(path, "plains", "plain", "savanna", "grassland", "steppe", "field")) return "plains";
         return "wilds";
+    }
+
+    /** Ocean wins only when its sampled area exceeds all land categories combined. */
+    public static String dominant(Map<String, Integer> biomeCounts) {
+        Map<String, Long> categories = new TreeMap<>();
+        biomeCounts.forEach((id, count) -> {
+            if (count != null && count > 0) {
+                categories.merge(classify(id), count.longValue(), Long::sum);
+            }
+        });
+        long ocean = categories.getOrDefault("ocean", 0L);
+        long land = categories.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals("ocean") && !entry.getKey().isEmpty())
+                .mapToLong(Map.Entry::getValue)
+                .sum();
+        if (ocean > land) return "ocean";
+        return categories.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals("ocean") && !entry.getKey().isEmpty())
+                .max(Map.Entry.<String, Long>comparingByValue()
+                        .thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey)
+                .orElse(ocean > 0 ? "ocean" : "");
     }
 
     private static boolean containsAny(String path, String... markers) {

@@ -154,6 +154,9 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
     implementation "foundry.veil:veil-neoforge-${project.minecraft_version}:${project.veil_version}"
+    // Optional relay effects compile against local Photon/LDLib APIs without forcing runtime installation.
+    compileOnly files("libs/ldlib2-neoforge-1.21.1-2.2.6-all.jar")
+    compileOnly files("libs/photon-neoforge-1.21.1-2.1.4.jar")
     // Iris is compile-only: the BSL integration mixins remain optional when shaders are absent.
     compileOnly("maven.modrinth:iris:${project.iris_version}") {
         transitive = false
@@ -220,7 +223,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
                              mod_license            : mod_license,
                              mod_version            : mod_version,
                              mod_authors            : mod_authors,
-                             mod_credits            : mod_credits,
+                             mod_original_authors   : mod_original_authors,
                              mod_description        : mod_description,
                              geckolib_version_range : geckolib_version_range,
                              sable_version          : sable_version]
@@ -233,6 +236,13 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 // Include the output of "generateModMetadata" as an input directory for the build
 // this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata
+
+// Preserve upstream copyright, MIT permission, and attribution in distributed resources.
+tasks.named("processResources", ProcessResources) {
+    from(project.projectDir) {
+        include "LICENSE", "NOTICE.md"
+    }
+}
 // To avoid having to run "generateModMetadata" manually, make it run on every project reload
 neoForge.ideSyncTask generateModMetadata
 

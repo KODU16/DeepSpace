@@ -1,0 +1,11 @@
+{
+  "name": "Display Settings",
+  "category": "integration",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Visual Detail",
+      "text": "Client options adjust planetary decoration and shading detail. Lower settings reduce optional visual calculations while preserving world and navigation information."
+    }
+  ]
+}

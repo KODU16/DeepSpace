@@ -35,6 +35,8 @@ public final class RingWorldCommand {
         dispatcher.register(Commands.literal("deepspace")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("debug")
+                        .then(Commands.literal("summon_dacha")
+                                .executes(RingWorldCommand::summonDacha))
                         .then(Commands.literal("summon_ring_world")
                                 .executes(RingWorldCommand::summonRingWorld)
                                 .then(Commands.literal("broken")
@@ -55,6 +57,26 @@ public final class RingWorldCommand {
 
     private static int summonRingWorld(CommandContext<CommandSourceStack> context) {
         return summonRingWorld(context, 0);
+    }
+
+    /** Creates Dacha without teleporting the caller; the new relay stays in the caller's galaxy. */
+    private static int summonDacha(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            Galaxy galaxy = InfiniteDimensionsIntegration.summonDacha(source.getServer(), source.getLevel().dimension());
+            Planet relay = PlanetRegistry.getAllPlanets().stream()
+                    .filter(planet -> planet.isWormhole() && planet.getDimension().equals(galaxy.dimension()))
+                    .filter(planet -> planet.getId().contains("_wormhole_dacha_"))
+                    .findFirst().orElseThrow();
+            Vec3 pos = relay.getCenter();
+            source.sendSuccess(() -> Component.literal("Created Dacha: G4 star, six S-grade planets at radius 5000. "
+                    + "Hyper relay at " + Math.round(pos.x) + ", " + Math.round(pos.y) + ", " + Math.round(pos.z)
+                    + " in " + relay.getGalaxy().location()), true);
+            return 1;
+        } catch (RuntimeException exception) {
+            source.sendFailure(Component.literal("Failed to summon Dacha: " + exception.getMessage()));
+            return 0;
+        }
     }
 
     /** Generates a forced ring world with an exact random subset of zero to three broken sections. */

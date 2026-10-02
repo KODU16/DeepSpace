@@ -15,11 +15,13 @@ import dev.ryanhcode.sable.index.SableTags;
 import dev.ryanhcode.sable.mixinterface.entity.entity_sublevel_collision.EntityMovementExtension;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
+import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.sublevel.plot.ServerLevelPlot;
 import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
 import dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -29,6 +31,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec2;
@@ -46,9 +49,12 @@ import world.landfall.deepspace.Deepspace;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import world.landfall.deepspace.integration.InfiniteDimensionsIntegration;
 import world.landfall.deepspace.network.SubLevelTransferProbePacket;
+import world.landfall.deepspace.network.SubLevelTransferCompletePacket;
 import world.landfall.deepspace.network.GalaxyArrivalPacket;
 import world.landfall.deepspace.planet.Planet;
+import world.landfall.deepspace.planet.PlanetExitPlacement;
 import world.landfall.deepspace.planet.PlanetRegistry;
+import world.landfall.deepspace.planet.TerminaLandingCoordinates;
 import world.landfall.deepspace.planet.WormholeArrivalPlacement;
 
 import java.util.*;
@@ -57,10 +63,16 @@ import java.util.*;
 public class SubLevelEvents {
 
     private static final float PlanetTeleportOffset = 1.2345f;
+    private static final ResourceKey<Biome> SPACE_BIOME =
+            ResourceKey.create(Registries.BIOME, Deepspace.path("space"));
     private static final String VsieControlSeatMountClass = "com.kodu16.vsie.content.controlseat.entity.ControlSeatMountEntity";
     private static final List<PendingEntityRestore> PENDING_ENTITY_RESTORES = new ArrayList<>();
+    private static final List<TransferPhysicsDiagnostic> TRANSFER_PHYSICS_DIAGNOSTICS = new ArrayList<>();
     private static final Map<UUID, Set<UUID>> CLIENT_READY_TRANSFERS = new HashMap<>();
     private static final Map<UUID, String> LAST_PLANET_ENTRY_DIAGNOSTIC = new HashMap<>();
+    // Contact fixes the destination once, so a moving ship cannot leave a trail of terrain tickets.
+    private static final Map<UUID, PendingPlanetEntry> PENDING_PLANET_ENTRIES = new HashMap<>();
+    private record PendingPlanetEntry(UUID triggerId, Planet planet, Vec3 landing) {}
     private static final SubLevelTransferGuard TRANSFER_GUARD = new SubLevelTransferGuard();
     private static final Set<UUID> TEMPORARY_CHUNK_SYNC_PLAYERS = new HashSet<>();
     private static final Set<ServerSubLevelContainer> GALAXY_FORCE_LOAD_CONTAINERS =
@@ -76,9 +88,22 @@ public class SubLevelEvents {
 
 
     @SubscribeEvent
+    public static void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
+        // Static contacts must not survive a world being closed and reopened in the same process.
+        PENDING_PLANET_ENTRIES.clear();
+    }
+
+    @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post e) {
         var server = e.getServer();
+        // Discard contacts whose source was destroyed or moved by a different transfer.
+        PENDING_PLANET_ENTRIES.entrySet().removeIf(entry -> {
+            ServerLevel source = server.getLevel(entry.getValue().planet().getGalaxy());
+            ServerSubLevelContainer container = source == null ? null : ServerSubLevelContainer.getContainer(source);
+            return container == null || container.getSubLevel(entry.getKey()) == null;
+        });
         restorePendingEntities(server);
+        sampleTransferPhysics(server);
         long gameTick = server.overworld().getGameTime();
 
         // Every registered galaxy owns its own planet and wormhole approach checks.
@@ -104,6 +129,7 @@ public class SubLevelEvents {
         container.addObserver(new SubLevelObserver() {
             @Override
             public void onSubLevelAdded(SubLevel subLevel) {
+                normalizeGalaxySubLevelBiome(subLevel);
                 forceLoadGalaxySubLevel(container, subLevel);
             }
 
@@ -119,7 +145,16 @@ public class SubLevelEvents {
             }
         });
         for (ServerSubLevel subLevel : container.getAllSubLevels()) {
+            normalizeGalaxySubLevelBiome(subLevel);
             forceLoadGalaxySubLevel(container, subLevel);
+        }
+    }
+
+    /** Sable initializes new plots as plains, including plots rebuilt during a transfer. */
+    private static void normalizeGalaxySubLevelBiome(SubLevel subLevel) {
+        if (subLevel instanceof ServerSubLevel serverSubLevel) {
+            ServerLevelPlot plot = serverSubLevel.getPlot();
+            plot.setBiome(SPACE_BIOME);
         }
     }
 
@@ -140,14 +175,16 @@ public class SubLevelEvents {
             if (subLevel == null) {
                 continue;
             }
+            PendingPlanetEntry pending = PENDING_PLANET_ENTRIES.get(subLevel.getUniqueId());
+            if (pending != null) {
+                // Finish an accepted contact even if the ship has crossed the model while worldgen runs.
+                enterPlanet(server, sourceContainer, subLevel, pending.planet(), gameTick);
+                continue;
+            }
             for (Planet planet : bodies) {
                 // Wormholes only start jumps explicitly, so their model is never a tick-time collision target.
                 if (planet.isWormhole()) {
                     continue;
-                }
-                // Preload landing chunks before contact so worldgen is not on the transfer tick.
-                if (approachingPlanet(subLevel, planet)) {
-                    preloadPlanetDestination(server, subLevel, planet);
                 }
                 boolean riderContact = trackedPlayerTouchesPlanet(sourceContainer.getLevel(), subLevel, planet);
                 if (riderContact) {
@@ -166,6 +203,17 @@ public class SubLevelEvents {
             Planet planet,
             long gameTick
     ) {
+        PendingPlanetEntry pending = PENDING_PLANET_ENTRIES.get(trigger.getUniqueId());
+        if (pending != null) {
+            // All connected members must retain the contact trigger's coordinate frame.
+            planet = pending.planet();
+            trigger = sourceContainer.getSubLevel(pending.triggerId());
+            if (trigger == null) {
+                PendingPlanetEntry abandoned = pending;
+                PENDING_PLANET_ENTRIES.values().removeIf(entry -> entry == abandoned);
+                return;
+            }
+        }
         ServerLevel destinationLevel = server.getLevel(planet.getDimension());
         ServerSubLevelContainer destinationContainer = destinationLevel == null
                 ? null
@@ -184,11 +232,23 @@ public class SubLevelEvents {
         }
 
         Collection<SubLevel> connected = SubLevelHelper.getConnectedChain(trigger);
-        if (!claimTransfer(connected, gameTick)) {
+        if (connected.stream().anyMatch(member -> TRANSFER_GUARD.isProtected(member.getUniqueId(), gameTick))) return;
+        if (pending == null) {
+            Vector3d target = calculatePlanetEntryPosition(trigger, planet, destinationLevel);
+            pending = new PendingPlanetEntry(trigger.getUniqueId(), planet, new Vec3(target.x, target.y, target.z));
+            for (SubLevel member : connected) PENDING_PLANET_ENTRIES.put(member.getUniqueId(), pending);
+        }
+        Vector3d sourcePosition = new Vector3d(trigger.logicalPose().position());
+        Vec3 landing = pending.landing();
+        Vector3d destinationPosition = new Vector3d(landing.x, landing.y, landing.z);
+        // Poll the actual pilot landing chunks, which can differ from the ship center across a chunk edge.
+        if (!planetEntryChunksReady(sourceContainer, connected, destinationLevel, sourcePosition, destinationPosition)) {
+            logPlanetEntryState(trigger, planet, "LANDING_CHUNK_PENDING", "destination={} target={}",
+                    destinationLevel.dimension().location(), destinationPosition);
             return;
         }
-        Vector3d sourcePosition = trigger.logicalPose().position();
-        Vector3d destinationPosition = calculatePlanetEntryPosition(trigger, planet, destinationLevel);
+        if (!claimTransfer(connected, gameTick)) return;
+        PendingPlanetEntry accepted = pending;
         logPlanetEntryState(
                 trigger,
                 planet,
@@ -209,7 +269,10 @@ public class SubLevelEvents {
                 gameTick,
                 TransferMotionPolicy.STOP_AT_DESTINATION
         );
-        if (!transferred) {
+        if (transferred) {
+            // Keep the accepted contact retryable if any participant or reconstruction failed.
+            PENDING_PLANET_ENTRIES.values().removeIf(entry -> entry == accepted);
+        } else {
             releaseTransfer(connected);
             logPlanetEntryState(
                     trigger,
@@ -368,9 +431,9 @@ public class SubLevelEvents {
                 }
                 Vector3d sourcePosition = subLevel.logicalPose().position();
                 Vec3 previousPosition = new Vec3(sourcePosition.x, sourcePosition.y, sourcePosition.z);
-                Vec3 exitPosition = planet.isRingWorldEdge()
-                        ? calculateRingWorldExitPosition(transferSubLevels, sourcePosition, previousPosition, planet, sourceLevel)
-                        : calculateExitPosition(previousPosition, planet, sourceLevel);
+                // Clear the entire departing hull, including ordinary planets as well as elongated ring edges.
+                Vec3 exitPosition = calculateSafePlanetExitPosition(
+                        transferSubLevels, sourcePosition, previousPosition, planet, sourceLevel);
                 LOGGER.info(
                         "Teleporting sublevel from {} to host galaxy {} at {}",
                         planet.getName(),
@@ -414,7 +477,8 @@ public class SubLevelEvents {
             SubLevel subLevel,
             double exitHeight
     ) {
-        if (subLevel.logicalPose().position().y + subLevel.boundingBox().height() * 0.5 > exitHeight) {
+        // The center of mass need not coincide with the center of the hull bounds.
+        if (subLevel.boundingBox().maxY() > exitHeight) {
             return true;
         }
         for (ServerPlayer player : sourceLevel.players()) {
@@ -447,25 +511,31 @@ public class SubLevelEvents {
         return null;
     }
 
-    /** 船体进入星球外扩包围盒后就开始预热目标世界。 */
-    private static boolean approachingPlanet(SubLevel subLevel, Planet planet) {
-        Vector3d pose = subLevel.logicalPose().position();
-        AABB ship = AABB.ofSize(
-                new Vec3(pose.x, pose.y, pose.z),
-                Math.max(16.0D, subLevel.boundingBox().width()) + 640.0D,
-                Math.max(16.0D, subLevel.boundingBox().height()) + 640.0D,
-                Math.max(16.0D, subLevel.boundingBox().length()) + 640.0D
-        );
-        return planet.getModelBounds().intersects(ship);
-    }
-
-    private static void preloadPlanetDestination(MinecraftServer server, SubLevel subLevel, Planet planet) {
-        ServerLevel destinationLevel = server.getLevel(planet.getDimension());
-        if (destinationLevel == null) {
-            return;
+    /** Keeps pilots in the source dimension until their exact destination chunks are FULL. */
+    private static boolean planetEntryChunksReady(
+            ServerSubLevelContainer source, Collection<SubLevel> connected, ServerLevel destination,
+            Vector3d center, Vector3d target
+    ) {
+        Vector3d delta = new Vector3d(target).sub(center);
+        boolean ready = true;
+        boolean hasPlayer = false;
+        Set<UUID> visited = new HashSet<>();
+        for (Set<Entity> entities : collectTransferEntities(connected, source).values()) {
+            for (Entity entity : entities) {
+                if (!(entity instanceof ServerPlayer player) || !visited.add(player.getUUID())) continue;
+                hasPlayer = true;
+                Vec3 projected = Sable.HELPER.projectOutOfSubLevel(source.getLevel(), player.position());
+                Vec3 landing = projected.add(delta.x, delta.y, delta.z);
+                DestinationChunkPreload.request(destination, landing);
+                ready &= DestinationChunkPreload.isReady(destination, landing);
+            }
         }
-        Vector3d landing = calculatePlanetEntryPosition(subLevel, planet, destinationLevel);
-        DestinationChunkPreload.request(destinationLevel, new Vec3(landing.x, landing.y, landing.z));
+        if (!hasPlayer) {
+            Vec3 landing = new Vec3(target.x, target.y, target.z);
+            DestinationChunkPreload.request(destination, landing);
+            ready = DestinationChunkPreload.isReady(destination, landing);
+        }
+        return ready;
     }
 
     /** Uses the pilot's projected host position as a fallback for rider-only contact detection. */
@@ -504,16 +574,14 @@ public class SubLevelEvents {
         double maxY = Double.NEGATIVE_INFINITY;
         double maxZ = Double.NEGATIVE_INFINITY;
         for (SubLevel member : connected) {
-            Vector3d pose = member.logicalPose().position();
-            double halfX = member.boundingBox().width() * 0.5D;
-            double halfY = member.boundingBox().height() * 0.5D;
-            double halfZ = member.boundingBox().length() * 0.5D;
-            minX = Math.min(minX, pose.x - reference.x - halfX);
-            minY = Math.min(minY, pose.y - reference.y - halfY);
-            minZ = Math.min(minZ, pose.z - reference.z - halfZ);
-            maxX = Math.max(maxX, pose.x - reference.x + halfX);
-            maxY = Math.max(maxY, pose.y - reference.y + halfY);
-            maxZ = Math.max(maxZ, pose.z - reference.z + halfZ);
+            // Use actual world extrema rather than assuming the mass center is the hull center.
+            var bounds = member.boundingBox();
+            minX = Math.min(minX, bounds.minX() - reference.x);
+            minY = Math.min(minY, bounds.minY() - reference.y);
+            minZ = Math.min(minZ, bounds.minZ() - reference.z);
+            maxX = Math.max(maxX, bounds.maxX() - reference.x);
+            maxY = Math.max(maxY, bounds.maxY() - reference.y);
+            maxZ = Math.max(maxZ, bounds.maxZ() - reference.z);
         }
         return new WormholeArrivalPlacement.Bounds(minX, minY, minZ, maxX, maxY, maxZ);
     }
@@ -532,7 +600,10 @@ public class SubLevelEvents {
     private static double safeAtmosphereEntryY(SubLevel subLevel, Planet planet, ServerLevel destinationLevel) {
         double entryY = planet.resolveAtmosphereEntryHeight(destinationLevel.getMaxBuildHeight());
         double exitY = planet.resolveAtmosphereExitHeight(destinationLevel.getMaxBuildHeight());
-        return Math.min(entryY, exitY - subLevel.boundingBox().height() * 0.5D - 2.0D);
+        // Keep every connected hull below the exit boundary, including offset mass centers and taller companions.
+        double topOffset = Math.max(0.0D, connectedChainRelativeBounds(
+                SubLevelHelper.getConnectedChain(subLevel), subLevel.logicalPose().position()).maxY());
+        return Math.min(entryY, exitY - topOffset - 2.0D);
     }
 
     private static Vector3d calculatePlanetEntryPosition(
@@ -549,19 +620,26 @@ public class SubLevelEvents {
                 .multiply(planet.blockScale(), planet.blockScale(), planet.blockScale());
         double entryY = safeAtmosphereEntryY(subLevel, planet, destinationLevel);
         boolean sideways = Math.abs(distance.x) > Math.abs(distance.y) || Math.abs(distance.z) > Math.abs(distance.y);
+        Vector3d landing;
         if (!sideways) {
-            return distance.y > 0
+            landing = distance.y > 0
                     ? new Vector3d(-distance.x, entryY, distance.z)
                     : new Vector3d(distance.x, entryY, -distance.z);
-        }
-        if (Math.abs(distance.x) > Math.abs(distance.z)) {
-            return distance.x > 0
+        } else if (Math.abs(distance.x) > Math.abs(distance.z)) {
+            landing = distance.x > 0
                     ? new Vector3d(-distance.z, entryY, distance.y)
                     : new Vector3d(distance.z, entryY, distance.y);
+        } else {
+            landing = distance.z > 0
+                    ? new Vector3d(distance.x, entryY, distance.y)
+                    : new Vector3d(-distance.x, entryY, distance.y);
         }
-        return distance.z > 0
-                ? new Vector3d(distance.x, entryY, distance.y)
-                : new Vector3d(-distance.x, entryY, distance.y);
+        if (destinationLevel.dimension().equals(Level.END)) {
+            // Keep the ship above the central island instead of dropping it into the End's empty ring.
+            Vec3 safe = TerminaLandingCoordinates.avoidEmptyInnerRing(new Vec3(landing.x, landing.y, landing.z));
+            return new Vector3d(safe.x, safe.y, safe.z);
+        }
+        return landing;
     }
 
     /** Maps the ring's long and vertical surface axes into the destination world's horizontal plane. */
@@ -662,8 +740,8 @@ public class SubLevelEvents {
         return exitPos;
     }
 
-    /** Preserves surface-coordinate mapping, then clears the complete elongated ring model on its star-facing axis. */
-    private static Vec3 calculateRingWorldExitPosition(
+    /** Preserves mapped height and tangent coordinates while leaving three hull lengths beyond the model. */
+    private static Vec3 calculateSafePlanetExitPosition(
             Collection<SubLevel> connected,
             Vector3d sourcePosition,
             Vec3 previousPosition,
@@ -672,14 +750,17 @@ public class SubLevelEvents {
     ) {
         Vec3 desired = calculateExitPosition(previousPosition, planet, level);
         Vec3 starCenter = Objects.requireNonNull(PlanetRegistry.getSunForPlanet(planet)).getCenter();
-        Vec3 outward = planet.getCenter().subtract(starCenter);
-        WormholeArrivalPlacement.Point safe = WormholeArrivalPlacement.pushOutsideAlongDirection(
+        Vec3 outward = planet.isRingWorldEdge()
+                ? planet.getCenter().subtract(starCenter)
+                : desired.subtract(planet.getCenter());
+        WormholeArrivalPlacement.Point safe = PlanetExitPlacement.place(
                 planetBounds(planet),
                 connectedChainRelativeBounds(connected, sourcePosition),
                 point(desired),
-                point(outward),
-                WormholeArrivalPlacement.DEFAULT_CLEARANCE
+                point(outward)
         );
+        LOGGER.info("[DEEPSPACE-PLANET-EXIT] phase=SAFE_EXIT_PLANNED planet={} mapped={} target={} relativeHull={}",
+                planet.getId(), desired, safe, connectedChainRelativeBounds(connected, sourcePosition));
         return new Vec3(safe.x(), safe.y(), safe.z());
     }
 
@@ -693,6 +774,45 @@ public class SubLevelEvents {
                 (float) (insidePlanet.x / scale),
                 (float) (insidePlanet.y / scale)
         );
+    }
+
+    /** Share the exact participant selection between readiness checks and snapshot transfer. */
+    private static Map<UUID, Set<Entity>> collectTransferEntities(
+            Collection<SubLevel> compoundSubLevel, ServerSubLevelContainer sourceContainer
+    ) {
+        HashMap<UUID, Set<Entity>> visitedEntities = new HashMap<>();
+
+        for(SubLevel subLevel : compoundSubLevel) {
+            // Sable supplies world bounds, including rotation and the offset from the center of mass.
+            var bounds = subLevel.boundingBox();
+            AABB box = new AABB(bounds.minX(), bounds.minY(), bounds.minZ(),
+                    bounds.maxX(), bounds.maxY(), bounds.maxZ());
+            // Match Dimensional Sable's exact structure bounds and retain every player in the plot.
+            List<Entity> candidates = sourceContainer.getLevel().getEntities((Entity)null, box);
+            Set<Entity> movingEntities = expandRidingGraph(candidates);
+            for (ServerPlayer player : sourceContainer.getLevel().players()) {
+                // A rider may be stored in plot coordinates; compare everyone in the same world frame.
+                Vec3 projected = Sable.HELPER.projectOutOfSubLevel(sourceContainer.getLevel(), player.position());
+                AABB playerBounds = player.getBoundingBox().move(projected.subtract(player.position()));
+                if (box.contains(projected) || box.intersects(playerBounds)) {
+                    movingEntities.add(player);
+                    movingEntities.addAll(expandRidingGraph(List.of(player)));
+                }
+            }
+            visitedEntities.put(subLevel.getUniqueId(), movingEntities);
+        }
+        // Tracking is authoritative for players standing on a Sable body near an imprecise AABB edge.
+        Set<UUID> movingIds = compoundSubLevel.stream().map(SubLevel::getUniqueId).collect(java.util.stream.Collectors.toSet());
+        for (ServerPlayer player : sourceContainer.getLevel().players()) {
+            // Seat-only tracking must include every passenger, even outside an approximate hull edge.
+            SubLevel tracked = findTrackedSubLevelInRidingGraph(player);
+            if (tracked != null && movingIds.contains(tracked.getUniqueId())) {
+                visitedEntities.computeIfAbsent(tracked.getUniqueId(), ignored -> new HashSet<>()).add(player);
+                visitedEntities.get(tracked.getUniqueId()).addAll(expandRidingGraph(List.of(player)));
+            }
+        }
+
+        return visitedEntities;
     }
 
     /** Captures an immutable Photomancy snapshot without moving players or deleting sources. */
@@ -721,46 +841,7 @@ public class SubLevelEvents {
                 position,
                 motionPolicy
         );
-        DestinationChunkPreload.request(
-                destinationContainer.getLevel(),
-                new Vec3(position.x, position.y, position.z)
-        );
-        HashMap<UUID, Set<Entity>> visitedEntities = new HashMap();
-
-        for(SubLevel subLevel : compoundSubLevel) {
-            double boxX = subLevel.boundingBox().width();
-            double boxY = subLevel.boundingBox().height();
-            double boxZ = subLevel.boundingBox().length();
-            // Each connected sublevel may have its own pose; collect its seats and riders around that pose.
-            Vector3d entityCenter = subLevel.logicalPose().position();
-            AABB box = new AABB(
-                    -boxX / 2.0 + entityCenter.x,
-                    -boxY / 2.0 + entityCenter.y,
-                    -boxZ / 2.0 + entityCenter.z,
-                    boxX / 2.0 + entityCenter.x,
-                    boxY / 2.0 + entityCenter.y,
-                    boxZ / 2.0 + entityCenter.z
-            );
-            // Match Dimensional Sable's exact structure bounds and retain every player in the plot.
-            List<Entity> candidates = sourceContainer.getLevel().getEntities((Entity)null, box);
-            Set<Entity> movingEntities = expandRidingGraph(candidates);
-            for (ServerPlayer player : sourceContainer.getLevel().players()) {
-                if (box.contains(player.position())) {
-                    movingEntities.add(player);
-                    movingEntities.addAll(expandRidingGraph(List.of(player)));
-                }
-            }
-            visitedEntities.put(subLevel.getUniqueId(), movingEntities);
-        }
-        // Tracking is authoritative for players standing on a Sable body near an imprecise AABB edge.
-        Set<UUID> movingIds = compoundSubLevel.stream().map(SubLevel::getUniqueId).collect(java.util.stream.Collectors.toSet());
-        for (ServerPlayer player : sourceContainer.getLevel().players()) {
-            SubLevel tracked = Sable.HELPER.getTrackingSubLevel(player);
-            if (tracked != null && movingIds.contains(tracked.getUniqueId())) {
-                visitedEntities.computeIfAbsent(tracked.getUniqueId(), ignored -> new HashSet<>()).add(player);
-                visitedEntities.get(tracked.getUniqueId()).addAll(expandRidingGraph(List.of(player)));
-            }
-        }
+        Map<UUID, Set<Entity>> visitedEntities = collectTransferEntities(compoundSubLevel, sourceContainer);
 
         SableBlueprint snapshot;
         try {
@@ -891,7 +972,7 @@ public class SubLevelEvents {
         Map<UUID, UUID> replacementTracking = remapTrackedSubLevels(trackedSubLevels, subLevelPlots);
         // Authorize ordinary chunk synchronization before the client probe is sent.
         movedPlayers.forEach(state -> TEMPORARY_CHUNK_SYNC_PLAYERS.add(state.playerId()));
-        notifyTransferredPlayers(destinationContainer, movedPlayers, replacementTracking, transferId);
+        notifyTransferredPlayers(destinationContainer, movedPlayers, replacementTracking, transferId, center);
 
         // Force the replacement plot through Sable's full-sync path before the riding barrier can open.
         subLevelPlots.values().forEach(plot -> forceLoadGalaxySubLevel(destinationContainer, plot.getSubLevel()));
@@ -929,7 +1010,7 @@ public class SubLevelEvents {
     }
 
     /** Atomic convenience used by planet entry/exit paths. */
-    private static boolean WarpSubLevels(
+    static boolean WarpSubLevels(
             Collection<SubLevel> compoundSubLevel,
             ServerSubLevelContainer sourceContainer,
             ServerSubLevelContainer destinationContainer,
@@ -1028,64 +1109,63 @@ public class SubLevelEvents {
         return removed;
     }
 
-    /** Moves every tracked pilot first so the destination dimension and nearby chunks are active. */
+    /** Capture every participant before detaching anyone, then move the complete player group. */
     private static List<PlayerTransferState> movePlayersBeforeSnapshotPlacement(
             PreparedJump jump,
             Map<UUID, Boolean> protectedPlayerGravity
     ) {
-        List<PlayerTransferState> moved = new ArrayList<>();
-        Set<UUID> visited = new HashSet<>();
+        Map<UUID, ServerPlayer> players = new LinkedHashMap<>();
+        List<PlayerTransferState> planned = new ArrayList<>();
         Vector3d delta = new Vector3d(jump.position()).sub(jump.center());
         for (Set<Entity> entities : jump.visitedEntities().values()) {
             for (Entity entity : entities) {
-                if (!(entity instanceof ServerPlayer player) || !visited.add(player.getUUID())) {
-                    continue;
-                }
+                if (!(entity instanceof ServerPlayer player) || players.putIfAbsent(player.getUUID(), player) != null) continue;
                 Vec3 sourcePosition = Sable.HELPER.projectOutOfSubLevel(
-                        jump.sourceContainer().getLevel(),
-                        player.position()
-                );
-                PlayerTransferState state = new PlayerTransferState(
-                        player.getUUID(),
-                        sourcePosition,
-                        sourcePosition.add(delta.x, delta.y, delta.z),
-                        player.getYRot(),
-                        player.getXRot(),
-                        player.isNoGravity(),
-                        player.getVehicle() == null ? null : player.getVehicle().getUUID()
-                );
-                Vec3 destinationPosition = state.destinationPosition();
-                protectedPlayerGravity.put(player.getUUID(), player.isNoGravity());
+                        jump.sourceContainer().getLevel(), player.position());
+                // Apply exactly the same translation as the ship snapshot to preserve everyone's relative position.
+                planned.add(new PlayerTransferState(player.getUUID(), sourcePosition,
+                        sourcePosition.add(delta.x, delta.y, delta.z), player.getYRot(), player.getXRot(),
+                        player.isNoGravity(), player.getVehicle() == null ? null : player.getVehicle().getUUID()));
+            }
+        }
+        boolean allChunksReady = true;
+        for (PlayerTransferState state : planned) {
+            // Recheck the snapshot's complete roster before moving anyone; pilots can occupy different chunks.
+            DestinationChunkPreload.request(jump.destinationContainer().getLevel(), state.destinationPosition());
+            allChunksReady &= DestinationChunkPreload.isReady(jump.destinationContainer().getLevel(), state.destinationPosition());
+        }
+        if (!allChunksReady) return null;
+        LOGGER.info("[DEEPSPACE-TRANSFER] id={} phase=PLAYER_GROUP_READY players={}",
+                jump.transferId(), planned.stream().map(PlayerTransferState::playerId).toList());
+
+        List<PlayerTransferState> moved = new ArrayList<>();
+        for (PlayerTransferState state : planned) {
+            ServerPlayer player = players.get(state.playerId());
+            Vec3 destinationPosition = state.destinationPosition();
+            protectedPlayerGravity.put(player.getUUID(), state.wasNoGravity());
+            // Include the current player in rollback even if dismounting or teleporting itself fails.
+            moved.add(state);
+            boolean teleported;
+            try {
                 player.setNoGravity(true);
                 player.unRide();
-                if (jump.galaxyArrival() != null) {
-                    PacketDistributor.sendToPlayer(player, jump.galaxyArrival());
-                }
-                // Always hide the loading screen; only galaxyArrival controls the white galaxy-jump overlay.
+                if (jump.galaxyArrival() != null) PacketDistributor.sendToPlayer(player, jump.galaxyArrival());
                 SeamlessTransitionSignal.begin(player);
-                boolean teleported = player.teleportTo(
-                        jump.destinationContainer().getLevel(),
-                        destinationPosition.x,
-                        destinationPosition.y,
-                        destinationPosition.z,
-                        Set.of(),
-                        player.getYRot(),
-                        player.getXRot()
-                );
-                if (!teleported) {
-                    LOGGER.error("[DEEPSPACE-TRANSFER] id={} phase=PLAYER_PRELOAD_FAILED player={}", jump.transferId(), player.getUUID());
-                    rollbackMovedPlayers(jump, moved);
-                    player.setNoGravity(state.wasNoGravity());
-                    return null;
-                }
-                moved.add(state);
-                LOGGER.info(
-                        "[DEEPSPACE-TRANSFER] id={} phase=PLAYER_PRELOADED player={} destinationPosition={}",
-                        jump.transferId(),
-                        player.getUUID(),
-                        destinationPosition
-                );
+                teleported = player.teleportTo(jump.destinationContainer().getLevel(), destinationPosition.x,
+                        destinationPosition.y, destinationPosition.z, Set.of(), state.yaw(), state.pitch());
+            } catch (RuntimeException exception) {
+                LOGGER.error("[DEEPSPACE-TRANSFER] id={} phase=PLAYER_PRELOAD_FAILED player={}",
+                        jump.transferId(), player.getUUID(), exception);
+                teleported = false;
             }
+            if (!teleported) {
+                LOGGER.error("[DEEPSPACE-TRANSFER] id={} phase=PLAYER_GROUP_ROLLBACK failedPlayer={}",
+                        jump.transferId(), player.getUUID());
+                rollbackMovedPlayers(jump, moved);
+                return null;
+            }
+            LOGGER.info("[DEEPSPACE-TRANSFER] id={} phase=PLAYER_PRELOADED player={} destinationPosition={}",
+                    jump.transferId(), player.getUUID(), destinationPosition);
         }
         return List.copyOf(moved);
     }
@@ -1199,7 +1279,8 @@ public class SubLevelEvents {
             ServerSubLevelContainer destinationContainer,
             Collection<PlayerTransferState> movedPlayers,
             Map<UUID, UUID> replacementTracking,
-            UUID transferId
+            UUID transferId,
+            Vector3d sourceCenter
     ) {
         for (PlayerTransferState state : movedPlayers) {
             Entity entity = destinationContainer.getLevel().getEntity(state.playerId());
@@ -1207,10 +1288,15 @@ public class SubLevelEvents {
                 continue;
             }
             UUID expectedSubLevel = replacementTracking.get(state.playerId());
+            Vec3 destination = state.destinationPosition();
+            // teleportTo already sent the authoritative player position before reconstruction.
+            // Repeating it here invokes NeoForge's synchronous Entity.setPosRaw -> getChunk path.
             PacketDistributor.sendToPlayer(player, new SubLevelTransferProbePacket(
                     transferId,
                     destinationContainer.getLevel().dimension().location().toString(),
-                    expectedSubLevel
+                    expectedSubLevel,
+                    destination.x, destination.y, destination.z,
+                    sourceCenter.x, sourceCenter.y, sourceCenter.z
             ));
             LOGGER.info(
                     "[DEEPSPACE-TRANSFER] id={} phase=PLAYER_STRUCTURE_READY player={} expectedSubLevel={}",
@@ -1540,24 +1626,47 @@ public class SubLevelEvents {
                 && containing != null && target.replacementSubLevelId().equals(containing.getUniqueId());
     }
 
-    /** Opens the riding barrier only after the client tracks this transfer's replacement sublevel. */
+    /** Opens the riding barrier after the destination hull arrives, without waiting for seat-driven tracking. */
     public static void markClientTransferReady(
             UUID transferId,
             UUID playerId,
             boolean expectedSubLevelPresent,
-            UUID trackedSubLevelId
+            UUID trackedSubLevelId,
+            String clientDimension,
+            double clientX,
+            double clientY,
+            double clientZ,
+            int observationTick
     ) {
-        UUID expectedSubLevelId = PENDING_ENTITY_RESTORES.stream()
-                .filter(pending -> pending.transferId().equals(transferId))
-                .map(pending -> pending.trackedSubLevels().get(playerId))
-                .filter(Objects::nonNull)
+        PendingEntityRestore pending = PENDING_ENTITY_RESTORES.stream()
+                .filter(candidate -> candidate.transferId().equals(transferId))
                 .findFirst()
                 .orElse(null);
+        if (pending == null) return;
+        UUID expectedSubLevelId = pending.trackedSubLevels().get(playerId);
+        Vec3 destination = pending.destinationPlayerPositions().get(playerId);
+        if (expectedSubLevelId == null || destination == null) return;
+        double dx = clientX - destination.x;
+        double dy = clientY - destination.y;
+        double dz = clientZ - destination.z;
+        // A seated client can drift while dismounted; the exact replacement mount will place it correctly.
+        boolean seatedTransfer = pending.passengerVehicles().containsKey(playerId);
+        boolean positionReady = pending.dimension().location().toString().equals(clientDimension)
+                && (seatedTransfer || dx * dx + dy * dy + dz * dz <= 32.0D * 32.0D);
         boolean ready = SubLevelTransferReadiness.canRestoreRiding(
                 expectedSubLevelPresent,
                 expectedSubLevelId,
                 trackedSubLevelId
-        );
+        ) && positionReady;
+        if (!positionReady && !seatedTransfer && observationTick % 20 == 0) {
+            ServerLevel level = pending.dimension() == null ? null : net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer().getLevel(pending.dimension());
+            Entity entity = level == null ? null : level.getEntity(playerId);
+            if (entity instanceof ServerPlayer player) {
+                // An entity teleport packet does not move the local player; resend player position explicitly.
+                player.connection.teleport(destination.x, destination.y, destination.z,
+                        player.getYRot(), player.getXRot());
+            }
+        }
         if (ready) {
             boolean newlyReady = CLIENT_READY_TRANSFERS
                     .computeIfAbsent(transferId, ignored -> new HashSet<>())
@@ -1571,7 +1680,8 @@ public class SubLevelEvents {
                         trackedSubLevelId
                 );
             }
-        } else {
+        } else if (observationTick % 20 == 0) {
+            // Summarize a closed barrier once per second; the client continues probing every tick.
             LOGGER.info(
                     "[DEEPSPACE-TRANSFER] id={} phase=CLIENT_BARRIER_WAIT player={} expectedPresent={} "
                             + "expectedSubLevel={} trackedSubLevel={}",
@@ -1599,10 +1709,13 @@ public class SubLevelEvents {
         movingSubLevels.forEach(subLevel -> movingIds.add(subLevel.getUniqueId()));
 
         Map<UUID, UUID> trackedSubLevels = new HashMap<>();
-        visitedEntities.values().forEach(entities -> entities.forEach(entity -> {
-            SubLevel tracked = Sable.HELPER.getTrackingSubLevel(entity);
+        visitedEntities.forEach((ownerId, entities) -> entities.forEach(entity -> {
+            SubLevel tracked = findTrackedSubLevelInRidingGraph(entity);
             if (tracked != null && movingIds.contains(tracked.getUniqueId())) {
                 trackedSubLevels.put(entity.getUUID(), tracked.getUniqueId());
+            } else if (entity instanceof ServerPlayer && movingIds.contains(ownerId)) {
+                // Hull passengers without prior tracking still need a destination hull for the client barrier.
+                trackedSubLevels.putIfAbsent(entity.getUUID(), ownerId);
             }
         }));
         return trackedSubLevels;
@@ -1675,29 +1788,15 @@ public class SubLevelEvents {
             // Never clamp this clock: 401 would disable retries and emit a heartbeat every tick.
             int pollTicks = pending.elapsedTicks() + 1;
             holdPendingPlayers(level, pending);
-            // Retry immediately, then every 5 ticks; a frozen client must not delay the first remount.
-            boolean shouldResolve = restoreAttempts == 0 || pollTicks % 5 == 0 || clientsReady;
-            if (level != null && shouldResolve) {
+            // Resolve on each server tick; the client readiness reply opens the riding barrier.
+            if (level != null) {
                 ServerSubLevelContainer container = ServerSubLevelContainer.getContainer(level);
                 if (container != null) {
-                    // Keep the replacement plot alive while ordinary galaxy chunks remain disabled.
-                    pending.protectedSubLevels().forEach(subLevelId -> {
-                        SubLevel subLevel = container.getSubLevel(subLevelId);
-                        if (subLevel != null) {
-                            forceLoadGalaxySubLevel(container, subLevel);
-                        }
-                    });
+                    // The placement ticket and galaxy observer already retain the replacement plot.
                     restoreAttempts++;
                     boolean trackingRestored = restoreTrackedSubLevels(container, pending.trackedSubLevels());
-                    // Source is already gone and destination mass is valid, so remount without waiting for a frozen client probe.
-                    boolean mayRestoreRiding = destinationHullReady(container, pending);
-                    if (mayRestoreRiding && !clientsReady && restoreAttempts == 1) {
-                        LOGGER.info(
-                                "[DEEPSPACE-TRANSFER] id={} phase=RESTORE_RIDING_WITHOUT_CLIENT pollTicks={}",
-                                pending.transferId(),
-                                pollTicks
-                        );
-                    }
+                    // Mount only after the local player has reached the destination and loaded the replacement hull.
+                    boolean mayRestoreRiding = clientsReady && destinationHullReady(container, pending);
                     boolean ridingRestored = mayRestoreRiding && restorePassengerVehicles(
                             level,
                             pending.passengerVehicles(),
@@ -1737,7 +1836,24 @@ public class SubLevelEvents {
                         pollTicks,
                         restoreAttempts
                 );
+                // A valid handle at restoration does not prove the native body keeps the destination pose.
+                pending.protectedSubLevels().forEach(subLevelId ->
+                        TRANSFER_PHYSICS_DIAGNOSTICS.add(new TransferPhysicsDiagnostic(
+                                pending.transferId(), pending.dimension(), subLevelId,
+                                Set.copyOf(pending.passengerVehicles().keySet()), 0)));
                 restorePlayerGravity(level, pending);
+                // Notify each client only after its replacement riding relationship is authoritative.
+                pending.protectedPlayerGravity().keySet().forEach(playerId -> {
+                    Entity entity = level.getEntity(playerId);
+                    if (entity instanceof ServerPlayer player) {
+                        Entity vehicle = player.getVehicle();
+                        UUID mountId = vehicle != null
+                                && VsieControlSeatMountClass.equals(vehicle.getClass().getName())
+                                ? vehicle.getUUID() : null;
+                        PacketDistributor.sendToPlayer(player, new SubLevelTransferCompletePacket(
+                                pending.transferId(), pending.dimension().location().toString(), mountId));
+                    }
+                });
                 pending.protectedPlayerGravity().keySet().forEach(TEMPORARY_CHUNK_SYNC_PLAYERS::remove);
                 TRANSFER_GUARD.release(pending.protectedSubLevels());
                 CLIENT_READY_TRANSFERS.remove(pending.transferId());
@@ -1759,6 +1875,90 @@ public class SubLevelEvents {
                 ));
             }
         }
+    }
+
+    /** Compares Sable's Java pose with the native body through a possible later dismount. */
+    private static void sampleTransferPhysics(MinecraftServer server) {
+        ListIterator<TransferPhysicsDiagnostic> iterator = TRANSFER_PHYSICS_DIAGNOSTICS.listIterator();
+        while (iterator.hasNext()) {
+            TransferPhysicsDiagnostic diagnostic = iterator.next();
+            int tick = diagnostic.elapsedTicks() + 1;
+            if (tick % 20 == 0) {
+                ServerLevel level = server.getLevel(diagnostic.dimension());
+                ServerSubLevelContainer container = level == null ? null : ServerSubLevelContainer.getContainer(level);
+                SubLevel found = container == null ? null : container.getSubLevel(diagnostic.subLevelId());
+                if (found instanceof ServerSubLevel subLevel) {
+                    // Diagnostics must never interrupt a live transfer if a native handle becomes stale.
+                    try {
+                        SubLevelPhysicsSystem physics = SubLevelPhysicsSystem.get(level);
+                        RigidBodyHandle handle = RigidBodyHandle.of(subLevel);
+                        Pose3d nativePose = handle.isValid()
+                                ? physics.getPipeline().readPose(subLevel, new Pose3d()) : null;
+                        List<String> riders = diagnostic.playerIds().stream().map(playerId -> {
+                            Entity player = level.getEntity(playerId);
+                            Entity vehicle = player == null ? null : player.getVehicle();
+                            return playerId + ":" + (vehicle == null ? "none" : vehicle.getUUID().toString());
+                        }).toList();
+                        List<String> seatControls = diagnostic.playerIds().stream().map(playerId -> {
+                            Entity player = level.getEntity(playerId);
+                            return playerId + ":" + describeVsieSeatInput(level, player == null ? null : player.getVehicle());
+                        }).toList();
+                        LOGGER.info("[DEEPSPACE-TRANSFER-DIAG] id={} side=server tick={} dimension={} subLevel={} logical={} last={} native={} linear={} angular={} inertia={} paused={} handleValid={} riders={} seatControls={}",
+                                diagnostic.transferId(), tick, diagnostic.dimension(), diagnostic.subLevelId(),
+                                subLevel.logicalPose().position(), subLevel.lastPose().position(),
+                                nativePose == null ? null : nativePose.position(),
+                                handle.isValid() ? physics.getPipeline().getLinearVelocity(subLevel, new Vector3d()) : null,
+                                handle.isValid() ? handle.getAngularVelocity(new Vector3d()) : null,
+                                subLevel.getMassTracker() == null ? null : subLevel.getMassTracker().getInertiaTensor(),
+                                physics.getPaused(), handle.isValid(), riders, seatControls);
+                    } catch (RuntimeException exception) {
+                        LOGGER.warn("[DEEPSPACE-TRANSFER-DIAG] id={} side=server tick={} nativeReadFailed={}",
+                                diagnostic.transferId(), tick, exception.toString());
+                    }
+                } else {
+                    LOGGER.info("[DEEPSPACE-TRANSFER-DIAG] id={} side=server tick={} dimension={} subLevel={} present=false",
+                            diagnostic.transferId(), tick, diagnostic.dimension(), diagnostic.subLevelId());
+                }
+            }
+            if (tick >= 400) {
+                iterator.remove();
+            } else {
+                iterator.set(new TransferPhysicsDiagnostic(diagnostic.transferId(), diagnostic.dimension(),
+                        diagnostic.subLevelId(), diagnostic.playerIds(), tick));
+            }
+        }
+    }
+
+    /** Separates an idle seat input path from an inactive Sable rigid body in transfer logs. */
+    private static String describeVsieSeatInput(ServerLevel level, Entity vehicle) {
+        BlockPos seatPos = readVsieControlSeatBoundPos(vehicle);
+        if (seatPos == null) {
+            return "no_seat";
+        }
+        Object seat = level.getBlockEntity(seatPos);
+        if (seat == null) {
+            return "seat_block_missing";
+        }
+        try {
+            Object data = seat.getClass().getMethod("getServerData").invoke(seat);
+            Class<?> dataClass = data.getClass();
+            Object throttle = dataClass.getMethod("getThrottle").invoke(data);
+            Object force = dataClass.getMethod("getForce").invoke(data);
+            Object torque = dataClass.getMethod("getTorque").invoke(data);
+            Object appliedForce = dataClass.getMethod("getFinalforce").invoke(data);
+            Object appliedTorque = dataClass.getMethod("getFinaltorque").invoke(data);
+            Object forceStrength = dataClass.getField("thruster_force_strength").get(data);
+            Object torqueStrength = dataClass.getField("thruster_torque_strength").get(data);
+            return "throttle=" + throttle + ",inputForce=" + force + ",inputTorque=" + torque
+                    + ",appliedForce=" + appliedForce + ",appliedTorque=" + appliedTorque
+                    + ",forceStrength=" + forceStrength + ",torqueStrength=" + torqueStrength;
+        } catch (ReflectiveOperationException exception) {
+            return "unavailable:" + exception.getClass().getSimpleName();
+        }
+    }
+
+    private record TransferPhysicsDiagnostic(UUID transferId, ResourceKey<Level> dimension, UUID subLevelId,
+                                             Set<UUID> playerIds, int elapsedTicks) {
     }
 
     /** Holds pilots at their safe physical entry point until the client can interpret plot coordinates. */
@@ -1800,7 +2000,9 @@ public class SubLevelEvents {
                 complete = false;
                 continue;
             }
-            if (player.position().distanceToSqr(destination) > 0.25D) {
+            // Unmounted Sable players may also use plot coordinates; compare physical positions before correction.
+            Vec3 projected = Sable.HELPER.projectOutOfSubLevel(level, player.position());
+            if (projected.distanceToSqr(destination) > 0.25D) {
                 player.teleportTo(level, destination.x, destination.y, destination.z, Set.of(), player.getYRot(), player.getXRot());
                 complete = false;
             }

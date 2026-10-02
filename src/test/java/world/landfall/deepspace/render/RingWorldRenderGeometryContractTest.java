@@ -77,6 +77,23 @@ public final class RingWorldRenderGeometryContractTest {
         assertEquals(3, RingWorldRenderGeometry.frameVertexIndex(3), "frame fourth vertex");
         assertFalse(RingWorldRenderGeometry.cullFrameFaces(),
                 "mixed GeckoLib frame faces stay visible from the ring interior and exterior");
+        for (int sectionIndex = 0; sectionIndex < RingWorldDimensions.SECTION_COUNT; sectionIndex++) {
+            double x = sectionIndex == 0 ? -584.0D / 16.0D : sectionIndex == 2 ? 584.0D / 16.0D : 0.0D;
+            double z = sectionIndex == 1 ? 584.0D / 16.0D : sectionIndex == 3 ? -584.0D / 16.0D : 0.0D;
+            assertNear(584.0D / 16.0D,
+                    RingWorldRenderGeometry.guiOutwardCoordinate(sectionIndex, x, z),
+                    "section outward coordinate " + sectionIndex);
+        }
+        assertTrue(RingWorldRenderGeometry.guiInteriorFrameFace(584.0D / 16.0D),
+                "terminal frame keeps its star-facing wall and rim");
+        assertFalse(RingWorldRenderGeometry.guiInteriorFrameFace(664.0D / 16.0D),
+                "terminal frame hides the outer radial wall");
+        double innerFrameRadius = 584.0D / 16.0D * MODEL_SCALE;
+        double guiTextureRadius = 624.0D / 16.0D * MODEL_SCALE
+                - RingWorldDimensions.WORLD_SURFACE_INWARD_OFFSET
+                - RingWorldDimensions.WORLD_SURFACE_HALF_THICKNESS;
+        assertTrue(guiTextureRadius < innerFrameRadius,
+                "terminal world texture must lie between its ring edge and the star");
         assertTrue(RingWorldRenderGeometry.surfaceAfterFrame(true),
                 "far-depth local fallback draws its frame before the world surface");
         assertFalse(RingWorldRenderGeometry.surfaceAfterFrame(false),

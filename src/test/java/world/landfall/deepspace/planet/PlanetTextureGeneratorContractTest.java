@@ -10,6 +10,23 @@ public final class PlanetTextureGeneratorContractTest {
     }
 
     public static void main(String[] arguments) {
+        // Switching dimensions must reuse a completed authored-texture scan without requiring a generated atlas.
+        assertTrue(PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        true, Planet.SurfaceScanStatus.COMPLETE, null),
+                "completed bundled scans must not requeue when their atlas is absent");
+        assertTrue(!PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        true, Planet.SurfaceScanStatus.SCANNING, null)
+                        && !PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        true, Planet.SurfaceScanStatus.UNKNOWN, null),
+                "unfinished bundled scans must remain eligible for sampling");
+        assertTrue(!PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        false, Planet.SurfaceScanStatus.COMPLETE, null)
+                        && !PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        false, Planet.SurfaceScanStatus.COMPLETE, PlanetTextureTier.MEDIUM),
+                "procedural planets with missing or incomplete atlases must still generate their maps");
+        assertTrue(PlanetTextureGenerator.hasCompletedSurfaceSampling(
+                        false, Planet.SurfaceScanStatus.COMPLETE, PlanetTextureTier.FULL),
+                "completed procedural atlases must remain reusable");
         assertTrue(PlanetTextureGenerator.MAX_CHUNKS_PER_PLANET_PER_TICK == 10,
                 "each planet must sample at most ten chunks per server tick");
         assertTrue(Planet.TextureGenerationDetail.valueOf("FEATURES")
@@ -17,21 +34,22 @@ public final class PlanetTextureGeneratorContractTest {
                 "data packs must be able to request feature-complete texture sampling");
         assertTrue(generatorSource().contains("syncPlanetToAllPlayers(planet.getId())"),
                 "each completed surface map must synchronize only its changed planet");
-        assertTrue(generatorSource().contains("coarseBiomeVotes.merge(chunkBiome, 1, Integer::sum)")
+        assertTrue(generatorSource().contains("PlanetBiomeType.dominant(coarseBiomeVotes)")
                         && generatorSource().contains("tier == PlanetTextureTier.FULL")
                         && generatorSource().contains("other eligible planets remain queued")
                         && generatorSource().contains("break;\n        }"),
-                "planet type must use one coarse vote per chunk and materials must wait for full sampling");
+                "planet type must use sampled area and materials must wait for full sampling");
         assertTrue(!generatorSource().contains("processTypeOnlyChunk")
                         && generatorSource().contains("private final boolean bundledTexture")
                         && generatorSource().contains("if (!bundledTexture)"),
                 "bundled-texture planets must complete the full scan without replacing authored textures");
         assertTrue(generatorSource().contains("chunkBiomeCounts.merge(PlanetBiomeType.classify(biomeId)")
-                        && generatorSource().contains("coarseBiomeVotes.merge(chunkBiome, 1, Integer::sum)")
+                        && generatorSource().contains("coarseBiomeVotes.merge(biome, count, Integer::sum)")
                         && generatorSource().contains("sampleIndex < PlanetTextureTier.COARSE.chunks()")
                         && generatorSource().contains("typeVoteSamples(seedFromWorldAndPlanet")
-                        && generatorSource().contains("one deterministic random chunk from each"),
-                "six separated random full-scan chunks must determine the translated planet type");
+                        && generatorSource().contains("one deterministic random chunk from each")
+                        && generatorSource().contains("PlanetBiomeType.dominant(biomeCounts)"),
+                "six separated random chunks give a provisional type before the full scan");
         String screen = read("src/main/java/world/landfall/deepspace/client/SolarSystemScreen.java");
         assertTrue(screen.contains("getSampledFluids().stream().limit(2)")
                         && screen.contains("getSampledBlocks().stream().limit(5)")

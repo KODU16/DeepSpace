@@ -119,6 +119,8 @@ deploy-backups/
 
 # This source tree requires the bundled Sable API at compile time.
 !libs/sable-photomancy-1.0.0.jar
+!libs/ldlib2-neoforge-1.21.1-2.2.6-all.jar
+!libs/photon-neoforge-1.21.1-2.1.4.jar
 
 # Common working directory
 run/

@@ -70,6 +70,11 @@ public final class PlanetTextureGenerator {
     private static final int MAP_MIN_Z = -TEXTURE_HEIGHT / 2;
     private static final int MAP_CHUNK_MIN_X = SectionPos.blockToSectionCoord(MAP_MIN_X);
     private static final int MAP_CHUNK_MIN_Z = SectionPos.blockToSectionCoord(MAP_MIN_Z);
+    // A ring slab is about 9.43:1, so 75x8 chunks preserve its surface proportions at 600 samples.
+    public static final int RING_STRIP_CHUNKS_X = 75;
+    public static final int RING_STRIP_CHUNKS_Z = 8;
+    private static final int RING_STRIP_WIDTH = RING_STRIP_CHUNKS_X * 16;
+    private static final int RING_STRIP_HEIGHT = RING_STRIP_CHUNKS_Z * 16;
     static final int MAX_CHUNKS_PER_PLANET_PER_TICK = 10;
     private static final Map<MinecraftServer, SamplingQueue> SAMPLING_QUEUES = new IdentityHashMap<>();
 
@@ -170,7 +175,9 @@ public final class PlanetTextureGenerator {
                 continue;
             }
             PlanetTextureTier current = planet.getGeneratedTextureTier();
-            if (current == PlanetTextureTier.FULL) continue;
+            // Authored textures have metadata-only caches; a missing generated atlas does not mean an unfinished scan.
+            if (hasCompletedSurfaceSampling(planet.getTexture().isPresent(),
+                    planet.getSurfaceScanStatus(), current)) continue;
             PlanetSurfaceMapCache.Progress progress = PlanetSurfaceMapCache.findProgress(server, planet);
             PlanetTextureTier requested = progress != null && progress.requestedTier.ordinal() > tier.ordinal()
                     ? progress.requestedTier : tier;
@@ -182,13 +189,21 @@ public final class PlanetTextureGenerator {
                 current = planet.getGeneratedTextureTier();
                 PlanetRegistry.syncPlanetToAllPlayers(planet.getId());
             }
-            if (current == PlanetTextureTier.FULL
+            if (hasCompletedSurfaceSampling(planet.getTexture().isPresent(),
+                    planet.getSurfaceScanStatus(), current)
                     || (current != null && current.ordinal() >= requested.ordinal() && progress == null)) continue;
             // Every procedural planet advances toward the final tier regardless of distance.
             PlanetTextureTier next = progress != null ? progress.tier : requested;
             completions.add(enqueueJob(server, planet, fragmentation, highPriority, next, requested));
         }
         return CompletableFuture.allOf(completions.toArray(CompletableFuture[]::new));
+    }
+
+    /** Completed metadata is sufficient for authored textures; procedural textures still require their full atlas. */
+    static boolean hasCompletedSurfaceSampling(boolean bundledTexture, Planet.SurfaceScanStatus status,
+                                               PlanetTextureTier completedTier) {
+        return completedTier == PlanetTextureTier.FULL
+                || (bundledTexture && status == Planet.SurfaceScanStatus.COMPLETE);
     }
 
     /** Upgrade only the nearby planet; repeated requests coalesce with its current job. */
@@ -221,7 +236,7 @@ public final class PlanetTextureGenerator {
             SurfaceMapJob job = new SurfaceMapJob(server, planet, fragmentation, tier, requested);
             if (job.tier != PlanetTextureTier.COARSE) {
                 planet.setSurfaceScanStatus(Planet.SurfaceScanStatus.SCANNING);
-                PlanetRegistry.syncPlanetToAllPlayers(planet.getId());
+                PlanetRegistry.syncPlanetProgressToAllPlayers(planet.getId());
             }
             // Expose queued detail and completion counts so slow custom dimensions are diagnosable.
             LOGGER.info("Queued {} {} surface-map sampling for {} ({}/{} chunks complete, target={})",
@@ -320,25 +335,32 @@ public final class PlanetTextureGenerator {
 
     /** Decodes and bilinearly resizes a cached RGB565 terrain map for a client texture. */
     public static int[] generateMapPixels(short @NotNull [] source, int width, int height) {
+        return generateMapPixels(source, width, height, false);
+    }
+
+    /** Decodes a completed ring strip using its physical sampling aspect ratio. */
+    public static int[] generateMapPixels(short @NotNull [] source, int width, int height, boolean ringStrip) {
         PlanetTextureTier tier = PlanetTextureTier.fromPixelCount(source.length);
         if (tier == null || width <= 0 || height <= 0) {
             return new int[0];
         }
+        int sourceWidth = ringStrip && tier == PlanetTextureTier.FULL ? RING_STRIP_WIDTH : tier.width();
+        int sourceHeight = ringStrip && tier == PlanetTextureTier.FULL ? RING_STRIP_HEIGHT : tier.height();
         int[] pixels = new int[width * height];
         for (int y = 0; y < height; y++) {
-            double sourceY = height == 1 ? 0.0 : y * (tier.height() - 1.0) / (height - 1.0);
+            double sourceY = height == 1 ? 0.0 : y * (sourceHeight - 1.0) / (height - 1.0);
             int y0 = (int) sourceY;
-            int y1 = Math.min(tier.height() - 1, y0 + 1);
+            int y1 = Math.min(sourceHeight - 1, y0 + 1);
             double fy = sourceY - y0;
             for (int x = 0; x < width; x++) {
-                double sourceX = width == 1 ? 0.0 : x * (tier.width() - 1.0) / (width - 1.0);
+                double sourceX = width == 1 ? 0.0 : x * (sourceWidth - 1.0) / (width - 1.0);
                 int x0 = (int) sourceX;
-                int x1 = Math.min(tier.width() - 1, x0 + 1);
+                int x1 = Math.min(sourceWidth - 1, x0 + 1);
                 double fx = sourceX - x0;
-                int top = blendRgb(decodeRgb565(source[y0 * tier.width() + x0]),
-                        decodeRgb565(source[y0 * tier.width() + x1]), fx);
-                int bottom = blendRgb(decodeRgb565(source[y1 * tier.width() + x0]),
-                        decodeRgb565(source[y1 * tier.width() + x1]), fx);
+                int top = blendRgb(decodeRgb565(source[y0 * sourceWidth + x0]),
+                        decodeRgb565(source[y0 * sourceWidth + x1]), fx);
+                int bottom = blendRgb(decodeRgb565(source[y1 * sourceWidth + x0]),
+                        decodeRgb565(source[y1 * sourceWidth + x1]), fx);
                 pixels[y * width + x] = 0xFF000000 | blendRgb(top, bottom, fy);
             }
         }
@@ -425,6 +447,7 @@ public final class PlanetTextureGenerator {
         private final float fragmentation;
         private final CompletableFuture<Void> completion = new CompletableFuture<>();
         private final PlanetTextureTier tier;
+        private final boolean ringStrip;
         private final PlanetSurfaceMapCache.Progress progress;
         private int[] colors;
         // Minecraft generation heights fit in signed shorts, halving each pending job's height buffer.
@@ -441,6 +464,7 @@ public final class PlanetTextureGenerator {
         private int nextChunkToSubmit;
         private int completedChunks;
         private int nextPreviewTick;
+        private int nextProgressSyncTick;
         private final boolean bundledTexture;
 
         private SurfaceMapJob(MinecraftServer server, Planet planet, float fragmentation,
@@ -451,6 +475,7 @@ public final class PlanetTextureGenerator {
             PlanetSurfaceMapCache.Progress saved = PlanetSurfaceMapCache.findProgress(server, planet);
             this.progress = saved != null ? saved : new PlanetSurfaceMapCache.Progress(tier);
             this.tier = progress.tier;
+            this.ringStrip = planet.isRingWorldEdge() && this.tier == PlanetTextureTier.FULL;
             if (requested.ordinal() > progress.requestedTier.ordinal()) progress.requestedTier = requested;
             // Resume the same compact buffers and skip chunks that were already sampled before exit.
             this.colors = progress.colors;
@@ -491,7 +516,11 @@ public final class PlanetTextureGenerator {
                 progress.sampled.set(finished.sampleIndex());
                 planet.setSurfaceScanProgress(completedChunks, PlanetTextureTier.FULL.chunks());
                 PlanetSurfaceMapCache.trackProgress(server, planet, progress);
-                PlanetRegistry.syncPlanetToAllPlayers(planet.getId());
+                // Keep progress visible without flooding the client during fast chunk sampling.
+                if (completedChunks % 10 == 0 && server.getTickCount() >= nextProgressSyncTick) {
+                    PlanetRegistry.syncPlanetProgressToAllPlayers(planet.getId());
+                    nextProgressSyncTick = server.getTickCount() + 20;
+                }
                 if (planet.getTextureGenerationDetail() == Planet.TextureGenerationDetail.FEATURES
                         && completedChunks < tier.chunks()
                         && planet.getGeneratedTextureTier() == null
@@ -503,10 +532,12 @@ public final class PlanetTextureGenerator {
             nextChunkToSubmit = progress.sampled.nextClearBit(nextChunkToSubmit);
             if (nextChunkToSubmit < tier.chunks()
                     && pendingChunks.size() < maxPendingChunks()) {
-                int chunkOffsetX = tier.chunkOffsetX(nextChunkToSubmit);
-                int chunkOffsetZ = tier.chunkOffsetZ(nextChunkToSubmit);
-                int chunkX = MAP_CHUNK_MIN_X + chunkOffsetX;
-                int chunkZ = MAP_CHUNK_MIN_Z + chunkOffsetZ;
+                int chunkX = ringStrip
+                        ? -RING_STRIP_CHUNKS_X / 2 + nextChunkToSubmit % RING_STRIP_CHUNKS_X
+                        : MAP_CHUNK_MIN_X + tier.chunkOffsetX(nextChunkToSubmit);
+                int chunkZ = ringStrip
+                        ? -RING_STRIP_CHUNKS_Z / 2 + nextChunkToSubmit / RING_STRIP_CHUNKS_X
+                        : MAP_CHUNK_MIN_Z + tier.chunkOffsetZ(nextChunkToSubmit);
                 // Generate only untracked temporary chunks; detailed planets add biome features in a local 3x3 window.
                 pendingChunks.addLast(new PendingChunk(
                         nextChunkToSubmit,
@@ -533,7 +564,8 @@ public final class PlanetTextureGenerator {
             planet.setGeneratedAtmosphereColor(skyColorFromBiomeSource(level));
             // Keep any completed lower-tier map visible while its replacement is still sampling.
             nextPreviewTick = server.getTickCount() + 200;
-            server.execute(() -> PlanetRegistry.syncPlanetToAllPlayers(planet.getId()));
+            // Preview metadata must not rebuild the current GPU texture.
+            server.execute(() -> PlanetRegistry.syncPlanetProgressToAllPlayers(planet.getId()));
             LOGGER.info("Published sampled-color preview for {} after {}/{} feature chunks",
                     planet.getId(), completedChunks, tier.chunks());
         }
@@ -768,7 +800,7 @@ public final class PlanetTextureGenerator {
             BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
             int minY = level.getMinBuildHeight();
             int maxY = level.getMaxBuildHeight() - 1;
-            // The first six FULL samples also provide the lightweight planet-type vote.
+            // The first six FULL samples provide a provisional type until the complete scan finishes.
             boolean typeVoteSample = tier == PlanetTextureTier.FULL
                     ? typeVoteSamples.get(sampleIndex)
                     : sampleIndex < PlanetTextureTier.COARSE.chunks();
@@ -780,7 +812,10 @@ public final class PlanetTextureGenerator {
                     int worldZ = (chunkZ << 4) + localZ;
                     int height = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, localX, localZ);
                     int surfaceY = findSurfaceY(chunk, pos, worldX, worldZ, Math.min(maxY, height + 1), minY);
-                    int pixel = tier.pixelIndex(sampleIndex, localX, localZ);
+                    int pixel = ringStrip
+                            ? (sampleIndex / RING_STRIP_CHUNKS_X * 16 + localZ) * RING_STRIP_WIDTH
+                                    + sampleIndex % RING_STRIP_CHUNKS_X * 16 + localX
+                            : tier.pixelIndex(sampleIndex, localX, localZ);
                     heights[pixel] = (short) surfaceY;
                     if (surfaceY < minY) {
                         colors[pixel] = FALLBACK_SURFACE_COLOR;
@@ -817,15 +852,9 @@ public final class PlanetTextureGenerator {
                 }
             }
             if (!chunkBiomeCounts.isEmpty()) {
-                String chunkBiome = selectTiedMaximum(
-                        chunkBiomeCounts,
-                        seedFromWorldAndPlanet(server.overworld().getSeed(), planet.getId()) ^ sampleIndex
-                );
-                coarseBiomeVotes.merge(chunkBiome, 1, Integer::sum);
-                planet.setPlanetTypeBiome(selectTiedMaximum(
-                        coarseBiomeVotes,
-                        seedFromWorldAndPlanet(server.overworld().getSeed(), planet.getId())
-                ));
+                // Count sampled columns directly so several land biomes cannot lose to one ocean biome by plurality.
+                chunkBiomeCounts.forEach((biome, count) -> coarseBiomeVotes.merge(biome, count, Integer::sum));
+                planet.setPlanetTypeBiome(PlanetBiomeType.dominant(coarseBiomeVotes));
             }
         }
 
@@ -836,11 +865,13 @@ public final class PlanetTextureGenerator {
                 releaseTemporaryData();
                 return;
             }
+            int mapWidth = ringStrip ? RING_STRIP_WIDTH : tier.width();
+            int mapHeight = ringStrip ? RING_STRIP_HEIGHT : tier.height();
             short[] encoded = new short[tier.pixels()];
-            for (int z = 0; z < tier.height(); z++) {
-                for (int x = 0; x < tier.width(); x++) {
-                    int index = z * tier.width() + x;
-                    int north = (z == 0 || (tier != PlanetTextureTier.FULL && z % tier.faceSize() == 0) ? z : z - 1) * tier.width() + x;
+            for (int z = 0; z < mapHeight; z++) {
+                for (int x = 0; x < mapWidth; x++) {
+                    int index = z * mapWidth + x;
+                    int north = (z == 0 || (!ringStrip && tier != PlanetTextureTier.FULL && z % tier.faceSize() == 0) ? z : z - 1) * mapWidth + x;
                     int delta = heights[index] - heights[north];
                     double shade = delta > 0 ? 1.06 : delta < 0 ? 0.94 : 1.0;
                     encoded[index] = encodeRgb565(scaleRgb(colors[index], shade));
@@ -854,12 +885,11 @@ public final class PlanetTextureGenerator {
                 planet.setGeneratedAtmosphereColor(skyColorFromBiomeSource(level));
             }
             if (tier == PlanetTextureTier.COARSE && !coarseBiomeVotes.isEmpty()) {
-                planet.setPlanetTypeBiome(selectTiedMaximum(
-                        coarseBiomeVotes,
-                        seedFromWorldAndPlanet(server.overworld().getSeed(), planet.getId())
-                ));
+                planet.setPlanetTypeBiome(PlanetBiomeType.dominant(coarseBiomeVotes));
             }
             if (tier == PlanetTextureTier.FULL) {
+                // The complete surface scan supersedes the six provisional type samples.
+                if (!biomeCounts.isEmpty()) planet.setPlanetTypeBiome(PlanetBiomeType.dominant(biomeCounts));
                 planet.setSurfaceSamples(
                         sortedSamples(biomeCounts),
                         sortedSamples(fluidCounts),
@@ -881,7 +911,7 @@ public final class PlanetTextureGenerator {
             // Publish this completed map immediately; other planets may still be sampling for many ticks.
             server.execute(() -> PlanetRegistry.syncPlanetToAllPlayers(planet.getId()));
             LOGGER.info("Completed {} {}x{} surface map for {} from {} chunks",
-                    tier, tier.width(), tier.height(), planet.getId(), tier.chunks());
+                    tier, mapWidth, mapHeight, planet.getId(), tier.chunks());
             releaseTemporaryData();
         }
 
@@ -907,17 +937,6 @@ public final class PlanetTextureGenerator {
             }
         }
         return minY - 1;
-    }
-
-    /** Selects a maximum-count ID and uses the stable planet seed only to break exact ties. */
-    private static String selectTiedMaximum(Map<String, Integer> counts, long seed) {
-        int maximum = counts.values().stream().mapToInt(Integer::intValue).max().orElse(0);
-        List<String> tied = counts.entrySet().stream()
-                .filter(entry -> entry.getValue() == maximum)
-                .map(Map.Entry::getKey)
-                .sorted()
-                .toList();
-        return tied.get(new Random(seed).nextInt(tied.size()));
     }
 
     /** Selects one deterministic random chunk from each of the six atlas faces. */

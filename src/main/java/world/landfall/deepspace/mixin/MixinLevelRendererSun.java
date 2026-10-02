@@ -68,7 +68,7 @@ public abstract class MixinLevelRendererSun {
     }
 
     /**
-     * Removes only the main world's vanilla moon while preserving its moon-phase clock.
+     * Removes the vanilla moon on managed planet surfaces while preserving the phase clock used by night layouts.
      */
     @WrapOperation(
             method = "renderSky",
@@ -84,7 +84,7 @@ public abstract class MixinLevelRendererSun {
             ),
             allow = 1
     )
-    private void deepspace$removeOverworldMoon(MeshData meshData, Operation<Void> original) {
+    private void deepspace$removeManagedMoon(MeshData meshData, Operation<Void> original) {
         if (NightSkyPlanetRenderer.shouldRemoveVanillaMoon()) {
             meshData.close();
             return;

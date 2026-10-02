@@ -1,0 +1,15 @@
+{
+  "name": "DeepSpace Helmet",
+  "category": "gear",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "Planet Information",
+      "text": "While wearing a DeepSpace Helmet, looking at a planet displays its information. Press J by default to toggle the display. Its armor stats match an iron helmet. Craft one iron helmet and one Heart of the Sea shapelessly to obtain one DeepSpace Helmet."
+    },
+    {
+      "title": "Other Helmets",
+      "text": "Craft it shapelessly with an item in the helmet tag to add the DeepSpace information display to that helmet."
+    }
+  ]
+}

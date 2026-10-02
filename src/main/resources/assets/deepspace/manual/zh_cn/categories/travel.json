@@ -1,0 +1,11 @@
+{
+  "name": "星际航行",
+  "description": "中继器、引擎与切换",
+  "icon": "relay",
+  "sortnum": 3,
+  "manual_entries": [
+    "relay",
+    "engine",
+    "transitions"
+  ]
+}

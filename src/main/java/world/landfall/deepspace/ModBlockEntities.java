@@ -12,6 +12,7 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import world.landfall.deepspace.blockentity.GroundSolarPanelBlockEntity;
 import world.landfall.deepspace.blockentity.HeatPipeBlockEntity;
+import world.landfall.deepspace.blockentity.HyperRelayEngineBlockEntity;
 import world.landfall.deepspace.blockentity.OxygenatorBlockEntity;
 
 import java.util.function.Supplier;
@@ -27,6 +28,11 @@ public class ModBlockEntities {
     public static final Supplier<BlockEntityType<?>> HEAT_PIPE_BLOCK_ENTITY_TYPE = BLOCK_ENTITIES.register(
             "heat_pipe_block_entity", () -> HeatPipeBlockEntity.TYPE
     );
+
+    // Engine entities synchronize visual state without adding an entity renderer or light source.
+    public static final Supplier<BlockEntityType<HyperRelayEngineBlockEntity>> HYPER_RELAY_ENGINE_BLOCK_ENTITY_TYPE =
+            BLOCK_ENTITIES.register("hyper_relay_engine", () -> BlockEntityType.Builder.of(
+                    HyperRelayEngineBlockEntity::new, ModBlocks.HYPER_RELAY_ENGINE_BLOCK.get()).build(null));
 
     public static void register(IEventBus eventBus) {
         BLOCK_ENTITIES.register(eventBus);

@@ -17,13 +17,14 @@ public final class HyperRelayTransferContractTest {
                 "standalone players must leave the Hyper Relay path before planning a landing");
 
         String events = read("src/main/java/world/landfall/deepspace/server/SubLevelEvents.java");
-        require(events.contains("boolean mayRestoreRiding = destinationHullReady(container, pending);")
-                        && events.contains("complete = trackingRestored && ridingRestored && playersRestored;")
-                        && events.contains("phase=RESTORE_RIDING_WITHOUT_CLIENT")
+        require(events.contains("boolean mayRestoreRiding = clientsReady && destinationHullReady(container, pending);")
+                        && events.contains("complete = clientsReady && trackingRestored && ridingRestored && playersRestored;")
+                        && events.contains("boolean positionReady")
+                        && events.contains("player.connection.teleport(destination.x, destination.y, destination.z,")
                         && events.contains("phase=REPLACEMENT_POSE_ALIGNED")
                         && events.contains("clampReplacementPlotBounds(plot, jump.snapshot(), sourceId);")
                         && events.contains("copy.logicalPose().position().set(destination);"),
-                "seat restoration must remount on a valid hull without waiting for a frozen client");
+                "seat restoration must wait for a valid hull and the client's destination position");
         require(events.contains("physics.getPipeline().wakeUp(copy);")
                         && events.contains("physics.setPaused(false);"),
                 "replacement Sable bodies must be active after a cross-dimension transfer");
@@ -38,11 +39,14 @@ public final class HyperRelayTransferContractTest {
                         && events.indexOf("player.teleportTo(")
                         < events.indexOf("passenger.startRiding(vehicle, true)"),
                 "restored riders and replacement seats must use the destination Sable transform baseline");
-        require(events.contains("setBoundBlockPos")
-                        && events.contains("writeVsieControlSeatBoundPos(vehicle, replacementTarget);"),
-                "recreated VSIE seats must use the destination plot binding after a cross-dimension transfer");
+        require(events.contains("prepareVsieMount(destinationLevel, replacementTarget, passenger)")
+                        && events.contains("target.boundBlockPos()")
+                        && events.contains("target.replacementSubLevelId().equals(containing.getUniqueId())"),
+                "VSIE seats must resolve their destination plot binding after a cross-dimension transfer");
         require(events.contains("destinationLevel.getBlockEntity(target.boundBlockPos())")
-                        && events.contains("\"confirmExternalPassengerRestore\",\n                                net.minecraft.world.entity.player.Player.class,\n                                vehicle.getClass()")
+                        && events.contains("\"confirmExternalPassengerRestore\",")
+                        && events.contains("net.minecraft.world.entity.player.Player.class,")
+                        && events.contains("vehicle.getClass()")
                         && events.contains("getMethod(\"confirmExternalPassengerRestore\", Entity.class)"),
                 "VSIE passenger confirmation must target the destination control-seat block entity first");
 

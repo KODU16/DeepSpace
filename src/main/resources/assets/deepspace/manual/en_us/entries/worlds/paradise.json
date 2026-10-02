@@ -1,0 +1,11 @@
+{
+  "name": "Paradise Probe",
+  "category": "worlds",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Rating Criteria",
+      "text": "The Paradise Probe combines green terrain, water-like colors, atmosphere, sky, and other habitat signals to assess a planet’s Earth-like appearance and assign a grade and score. Starbulbs only generate on S-grade paradise planets."
+    }
+  ]
+}

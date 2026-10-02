@@ -20,6 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
@@ -54,8 +55,9 @@ public class SunRenderer {
     private static final RenderStateShard.DepthTestStateShard SURFACE_SUN_DEPTH_TEST =
             new RenderStateShard.DepthTestStateShard("deepspace_surface_sun_always", GL11.GL_ALWAYS);
     // Galaxy suns share the reversed logarithmic depth with ring geometry so the nearer surface wins.
+    // Equal quantized log-depth values must not let a later star repaint a nearer ring fragment.
     private static final RenderStateShard.DepthTestStateShard GALAXY_SUN_DEPTH_TEST =
-            GalaxyLogDepth.GEQUAL_DEPTH_TEST;
+            GalaxyLogDepth.GREATER_DEPTH_TEST;
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final ResourceLocation OVERWORLD = ResourceLocation.withDefaultNamespace("overworld");
     private static final ResourceLocation SPACE = Deepspace.path("space");
@@ -72,16 +74,21 @@ public class SunRenderer {
     private static final ResourceLocation TEXTURE = Deepspace.path("textures/sun.png");
     private static final ResourceLocation SUN_SHADER = Deepspace.path("sun");
     private static final ResourceLocation SUN_LOG_SHADER = Deepspace.path("sun_log");
-    // Lift the noisy star core a little so the ring does not read through the disc edges.
-    private static final float STAR_TEXTURE_CORE_LIFT = 0.16F;
-    private static final RenderStateShard.ShaderStateShard SUN_RENDER_TYPE = new RenderStateShard.ShaderStateShard(() -> {
-        ShaderProgram shader = VeilRenderSystem.setShader(SUN_SHADER);
-        return VeilRenderBridge.toShaderInstance(shader);
-    });
-    private static final RenderStateShard.ShaderStateShard SUN_LOG_RENDER_TYPE = new RenderStateShard.ShaderStateShard(() -> {
-        ShaderProgram shader = VeilRenderSystem.setShader(SUN_LOG_SHADER);
-        return VeilRenderBridge.toShaderInstance(shader);
-    });
+    private static final ResourceLocation SUN_GLOW_SHADER = Deepspace.path("sun_glow");
+    private static final ResourceLocation SUN_GLOW_LOG_SHADER = Deepspace.path("sun_glow_log");
+    private static final ResourceLocation SUN_GLOW_TEXTURE = Deepspace.path("generated/sun_glow");
+    private static boolean glowTextureRegistered;
+    private static RenderType irisSurfaceGlowType;
+    private static RenderType irisGalaxyGlowType;
+    /** Binds Sampler0 explicitly because Veil shaders do not inherit vanilla's texture slot reliably. */
+    private static RenderStateShard.ShaderStateShard sunShaderState(ResourceLocation texture, boolean logDepth) {
+        return new RenderStateShard.ShaderStateShard(() -> {
+            ShaderProgram shader = VeilRenderSystem.setShader(logDepth ? SUN_LOG_SHADER : SUN_SHADER);
+            shader.setTexture("Sampler0", texture);
+            GalaxyLogDepth.applyGeometryScale(shader);
+            return VeilRenderBridge.toShaderInstance(shader);
+        });
+    }
     private static RenderType sunRenderType(ResourceLocation texture) {
         return SUN_TYPES.computeIfAbsent(texture, SunRenderer::createSunRenderType);
     }
@@ -101,7 +108,7 @@ public class SunRenderer {
             boolean galaxyLogDepth
     ) {
         var sunState = RenderType.CompositeState.builder()
-                .setShaderState(galaxyLogDepth ? SUN_LOG_RENDER_TYPE : SUN_RENDER_TYPE)
+                .setShaderState(sunShaderState(texture, galaxyLogDepth))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
                 .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
                 .setDepthTestState(galaxyLogDepth ? GALAXY_SUN_DEPTH_TEST : SURFACE_SUN_DEPTH_TEST)
@@ -144,7 +151,7 @@ public class SunRenderer {
             boolean galaxyLogDepth
     ) {
         var sunState = RenderType.CompositeState.builder()
-                .setShaderState(galaxyLogDepth ? SUN_LOG_RENDER_TYPE : SUN_RENDER_TYPE)
+                .setShaderState(sunShaderState(texture, galaxyLogDepth))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
                 .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
                 .setDepthTestState(galaxyLogDepth ? GALAXY_SUN_DEPTH_TEST : SURFACE_SUN_DEPTH_TEST)
@@ -160,7 +167,7 @@ public class SunRenderer {
                 sunState
         );
         var bloomState = RenderType.CompositeState.builder()
-                .setShaderState(galaxyLogDepth ? SUN_LOG_RENDER_TYPE : SUN_RENDER_TYPE)
+                .setShaderState(sunShaderState(texture, galaxyLogDepth))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
                 .setDepthTestState(galaxyLogDepth ? GALAXY_SUN_DEPTH_TEST : SURFACE_SUN_DEPTH_TEST)
                 .setCullState(RenderStateShard.CULL)
@@ -175,10 +182,10 @@ public class SunRenderer {
                 786432, true, false,
                 bloomState
         );
-        return VeilRenderType.layered(
-                sunRenderType,
-                bloomRenderType
-        );
+        // Galaxy bloom reads ring depth before the opaque sun writes its own depth.
+        return galaxyLogDepth
+                ? VeilRenderType.layered(bloomRenderType, sunRenderType)
+                : VeilRenderType.layered(sunRenderType, bloomRenderType);
     }
 
     /** Exposes the world-rendered star surface texture to GUI celestial views. */
@@ -222,8 +229,9 @@ public class SunRenderer {
             boolean galaxyLogDepth
     ) {
         var state = RenderType.CompositeState.builder()
-                // Keep the emissive Iris shader, but disable blending so the stellar surface remains opaque.
-                .setShaderState(RenderStateShard.RENDERTYPE_ENTITY_TRANSLUCENT_EMISSIVE_SHADER)
+                // Galaxy stars must write the same log depth as Gecko rings even with Iris active.
+                .setShaderState(galaxyLogDepth ? sunShaderState(texture, true)
+                        : RenderStateShard.RENDERTYPE_ENTITY_TRANSLUCENT_EMISSIVE_SHADER)
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
                 .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
                 .setDepthTestState(galaxyLogDepth ? GALAXY_SUN_DEPTH_TEST : SURFACE_SUN_DEPTH_TEST)
@@ -245,8 +253,59 @@ public class SunRenderer {
         );
     }
 
+    /** Draws visible Iris glow directly into the active sky target, including ring-world depth. */
+    private static RenderType irisGlowRenderType(boolean galaxyLogDepth) {
+        RenderType cached = galaxyLogDepth ? irisGalaxyGlowType : irisSurfaceGlowType;
+        if (cached != null) return cached;
+        ResourceLocation shader = galaxyLogDepth ? SUN_GLOW_LOG_SHADER : SUN_GLOW_SHADER;
+        var state = RenderType.CompositeState.builder()
+                .setShaderState(new RenderStateShard.ShaderStateShard(() -> {
+                    ShaderProgram program = VeilRenderSystem.setShader(shader);
+                    // Veil requires an explicit sampler binding for generated glow textures under Iris.
+                    program.setTexture("Sampler0", SUN_GLOW_TEXTURE);
+                    GalaxyLogDepth.applyGeometryScale(program);
+                    return VeilRenderBridge.toShaderInstance(program);
+                }))
+                .setTextureState(new RenderStateShard.TextureStateShard(SUN_GLOW_TEXTURE, false, false))
+                .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+                .setCullState(RenderStateShard.NO_CULL)
+                .setDepthTestState(galaxyLogDepth ? GALAXY_SUN_DEPTH_TEST : SURFACE_SUN_DEPTH_TEST)
+                .setWriteMaskState(RenderStateShard.COLOR_WRITE)
+                .setOutputState(IrisIntegration.IRIS_TARGET)
+                .createCompositeState(true);
+        RenderType created = RenderType.create("sun_iris_glow", DefaultVertexFormat.NEW_ENTITY,
+                VertexFormat.Mode.QUADS, 256, true, false, state);
+        if (galaxyLogDepth) irisGalaxyGlowType = created;
+        else irisSurfaceGlowType = created;
+        return created;
+    }
+
+    /** Generates a broad direction-independent glow around the opaque square star model. */
+    private static void ensureGlowTexture() {
+        if (glowTextureRegistered) return;
+        int size = 128;
+        NativeImage image = new NativeImage(size, size, false);
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                double dx = (x + 0.5D - size / 2.0D) / (size / 2.0D);
+                double dy = (y + 0.5D - size / 2.0D) / (size / 2.0D);
+                double radius = Math.hypot(dx, dy);
+                double core = Math.exp(-radius * radius * 8.0D) * 0.38D;
+                double surroundingLight = Math.exp(-radius * radius * 2.5D) * 0.24D;
+                int alpha = (int) Math.round(255.0D * Math.clamp(core + surroundingLight, 0.0D, 0.62D));
+                image.setPixelRGBA(x, y, alpha << 24 | 0x00FFFFFF);
+            }
+        }
+        Minecraft.getInstance().getTextureManager().register(SUN_GLOW_TEXTURE, new DynamicTexture(image));
+        glowTextureRegistered = true;
+    }
+
     public static void refreshMeshes() {
         var textureManager = Minecraft.getInstance().getTextureManager();
+        if (glowTextureRegistered) {
+            textureManager.release(SUN_GLOW_TEXTURE);
+            glowTextureRegistered = false;
+        }
         SPECTRAL_TEXTURES.values().stream()
                 .filter(texture -> !texture.equals(TEXTURE))
                 .forEach(textureManager::release);
@@ -295,13 +354,14 @@ public class SunRenderer {
             NativeImage tinted = new NativeImage(source.getWidth(), source.getHeight(), false);
             for (int y = 0; y < source.getHeight(); y++) {
                 for (int x = 0; x < source.getWidth(); x++) {
-                    // The generated star disc stays opaque enough to hide distant ring geometry.
+                    // Preserve spectral color and texture detail beneath a gentle full-face glow.
                     tinted.setPixelRGBA(
                             x,
                             y,
-                            liftStarDisc(
-                                    SunRenderMath.tintNeutralAbgr(source.getPixelRGBA(x, y), sun.getColor())
-                            )
+                            SunRenderMath.brightenSpectralFaceAbgr(
+                                    source.getPixelRGBA(x, y), sun.getColor(),
+                                    (x + 0.5D) / source.getWidth(),
+                                    (y + 0.5D) / source.getHeight())
                     );
                 }
             }
@@ -376,18 +436,6 @@ public class SunRenderer {
         return observer;
     }
 
-    /** Raises the low-contrast core of the stellar texture without changing its hue. */
-    private static int liftStarDisc(int abgr) {
-        int alpha = abgr >>> 24;
-        int blue = abgr >>> 16 & 0xFF;
-        int green = abgr >>> 8 & 0xFF;
-        int red = abgr & 0xFF;
-        blue = Math.round(blue + (255 - blue) * STAR_TEXTURE_CORE_LIFT);
-        green = Math.round(green + (255 - green) * STAR_TEXTURE_CORE_LIFT);
-        red = Math.round(red + (255 - red) * STAR_TEXTURE_CORE_LIFT);
-        return alpha << 24 | blue << 16 | green << 8 | red;
-    }
-
     /** Keeps the sun beyond the near plane and inside the far plane. */
     private static float celestialRenderDistance() {
         var gameRenderer = Minecraft.getInstance().gameRenderer;
@@ -456,6 +504,7 @@ public class SunRenderer {
         }
         if (galaxy != null) {
             // Registry synchronization may happen after the first client render refresh.
+            boolean ringGalaxy = hasRingWorldGeometry(galaxy);
             List<SunMesh> meshes = SPACE_MESHES.computeIfAbsent(galaxy.id(), key -> galaxy.suns().stream()
                     .map(star -> new SunMesh(
                     star,
@@ -474,9 +523,7 @@ public class SunRenderer {
             boolean surfaceView = false;
             meshes.forEach(mesh -> {
                 Vec3 physicalOffset = mesh.sun().getCenter().subtract(camera.getPosition());
-                float compression = SunRenderMath.boundedCelestialScale(
-                        celestialRenderDistance(), physicalOffset.length()
-                );
+                float compression = galaxyRenderScale(physicalOffset.length(), ringGalaxy);
                 // Position and size use the same factor, preserving apparent angular size inside the far plane.
                 renderedSuns.add(new RenderedSun(
                         mesh, physicalOffset.scale(compression).toVector3f(), compression, surfaceView
@@ -557,7 +604,7 @@ public class SunRenderer {
         PoseStack celestialPose = new PoseStack();
         celestialPose.mulPose(new Matrix4f(frustumMatrix));
         for (RenderedSun renderedSun : renderedSuns) {
-            drawSun(celestialPose, renderedSun, irisEnabled);
+            drawSun(celestialPose, renderedSun, irisEnabled, camera);
         }
     }
 
@@ -565,34 +612,78 @@ public class SunRenderer {
     private static void drawSun(
             PoseStack matrixStack,
             RenderedSun rendered,
-            boolean irisEnabled
+            boolean irisEnabled,
+            Camera camera
     ) {
         var poseStack = matrixStack;
         poseStack.pushPose();
-        BufferBuilder sunBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
-        Sun sun = rendered.mesh().sun();
-        ResourceLocation texture = getSurfaceTexture(sun);
-        int tint = getSurfaceVertexTint(sun);
-        rendered.mesh().cube().renderOutwardTintedFullBright(
-                poseStack, sunBuilder, rendered.position(), new Quaternionf(), tint, rendered.geometryScale()
-        );
-        if (irisEnabled) {
-            // Galaxy stars keep the local log-depth shader; surface stars use Iris with depth-always occlusion.
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            CelestialRenderDiagnostics.recordSunDraw();
-            irisSunRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
-        } else {
-            VeilRenderSystem.setShader(Deepspace.path("sun"));
-            RenderSystem.setShaderTexture(0, texture);
-            // The Deep Space sun shader reads the spectral vertex tint directly.
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            switch (ModOptions.options().atmosphereDetail) {
-                case NONE, BASIC -> sunRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
-                case EXPENSIVE -> sunBloomRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
+        // Surface skies retain their existing distance; galaxy bodies recover physical depth.
+        float previousScale = GalaxyLogDepth.setGeometryScale(
+                rendered.surfaceView() ? 1.0F : rendered.geometryScale());
+        try {
+            Sun sun = rendered.mesh().sun();
+            // Both Iris and Veil read the same baked spectral texture with an evenly bright face.
+            ResourceLocation texture = getSurfaceTexture(sun);
+            int tint = getSurfaceVertexTint(sun);
+            // Tesselator owns one active BufferBuilder, so finish the glow before opening the disc builder.
+            if (irisEnabled) drawIrisGlow(poseStack, rendered, camera);
+            BufferBuilder sunBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+            rendered.mesh().cube().renderOutwardTintedFullBright(
+                    poseStack, sunBuilder, rendered.position(), new Quaternionf(), tint, rendered.geometryScale()
+            );
+            if (irisEnabled) {
+                // Galaxy stars keep the local log-depth shader; surface stars use Iris with depth-always occlusion.
+                RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+                CelestialRenderDiagnostics.recordSunDraw();
+                irisSunRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
+            } else {
+                VeilRenderSystem.setShader(Deepspace.path("sun"));
+                RenderSystem.setShaderTexture(0, texture);
+                // The Deep Space sun shader reads the spectral vertex tint directly.
+                RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+                switch (ModOptions.options().atmosphereDetail) {
+                    case NONE, BASIC -> sunRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
+                    case EXPENSIVE -> sunBloomRenderType(texture, rendered.surfaceView()).draw(sunBuilder.buildOrThrow());
+                }
             }
+            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        } finally {
+            GalaxyLogDepth.setGeometryScale(previousScale);
+            poseStack.popPose();
         }
-        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-        poseStack.popPose();
+    }
+
+    private static void drawIrisGlow(PoseStack poseStack, RenderedSun rendered, Camera camera) {
+        ensureGlowTexture();
+        float radius = rendered.mesh().apparentRadius() * rendered.geometryScale() * 4.8F;
+        Vector3f right = new Vector3f(1.0F, 0.0F, 0.0F).rotate(camera.rotation());
+        Vector3f up = new Vector3f(0.0F, 1.0F, 0.0F).rotate(camera.rotation());
+        int color = 0xFF000000 | rendered.mesh().sun().getColor();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS,
+                DefaultVertexFormat.NEW_ENTITY);
+        addGlowVertex(builder, poseStack, rendered.position(), right, up, radius, -1.0F, -1.0F, 0.0F, 1.0F, color);
+        addGlowVertex(builder, poseStack, rendered.position(), right, up, radius, 1.0F, -1.0F, 1.0F, 1.0F, color);
+        addGlowVertex(builder, poseStack, rendered.position(), right, up, radius, 1.0F, 1.0F, 1.0F, 0.0F, color);
+        addGlowVertex(builder, poseStack, rendered.position(), right, up, radius, -1.0F, 1.0F, 0.0F, 0.0F, color);
+        irisGlowRenderType(!rendered.surfaceView()).draw(builder.buildOrThrow());
+    }
+
+    private static void addGlowVertex(BufferBuilder builder, PoseStack poseStack, Vector3f center,
+                                      Vector3f right, Vector3f up, float radius, float x, float y,
+                                      float u, float v, int color) {
+        Vector3f position = new Vector3f(center).fma(x * radius, right).fma(y * radius, up);
+        builder.addVertex(poseStack.last().pose(), position.x(), position.y(), position.z())
+                .setColor(color).setUv(u, v).setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(LightTexture.FULL_BRIGHT).setNormal(0.0F, 0.0F, 1.0F);
+    }
+
+    /** Keeps galaxy stars and their surrounding ring in the same compressed camera frame. */
+    static float galaxyRenderScale(double distance, boolean ringGalaxy) {
+        // Reserve room for the far side of a ring while keeping its star in the same frame.
+        double ringExtent = ringGalaxy
+                ? Math.hypot(RingWorldDimensions.OUTER_RADIUS, RingWorldDimensions.MODEL_HALF_HEIGHT)
+                : 0.0D;
+        return SunRenderMath.boundedCelestialScale(celestialRenderDistance(), distance + ringExtent);
     }
 
     /** Ring-world geometry and its host star stay locked at the noon zenith in every renderer. */

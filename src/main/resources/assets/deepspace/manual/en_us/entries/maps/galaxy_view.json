@@ -1,0 +1,15 @@
+{
+  "name": "Galaxy View",
+  "category": "maps",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Inspecting Celestial Bodies",
+      "text": "In the galaxy view, left-drag to pan, right-drag to rotate, and scroll to zoom. Hover over a planet to see its name, discoverer, distance from its star, biome type, and available surface samples."
+    },
+    {
+      "title": "Sidebar",
+      "text": "The sidebar switches between the star system view and the Paradise Probe."
+    }
+  ]
+}

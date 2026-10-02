@@ -1,0 +1,19 @@
+{
+  "name": "Star Bramble",
+  "category": "ecology",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "Habitat",
+      "text": "Star Brambles generate sparsely on S-grade paradise planets and can only grow and mature there. Planets added by datapacks, planets in the starting galaxy, and ring world segments do not count as naturally generated S-grade planets."
+    },
+    {
+      "title": "Harvest",
+      "text": "On S-grade paradise planets, Star Brambles periodically mature and can be harvested for Starbulbs. Starbulbs can be used to craft valuable items."
+    },
+    {
+      "title": "Withering",
+      "text": "On planets without an S-grade paradise rating, Star Brambles do not mature and quickly turn into withered brambles."
+    }
+  ]
+}

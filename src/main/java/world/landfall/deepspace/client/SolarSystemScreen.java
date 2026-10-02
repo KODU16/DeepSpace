@@ -132,7 +132,7 @@ public final class SolarSystemScreen extends Screen {
         graphics.fill(0, 0, width, HEADER_HEIGHT, 0xEE151923);
         graphics.drawCenteredString(font, title, width / 2, 8, 0xFFFFFFFF);
         if (mode == Mode.STAR_SYSTEM) {
-            graphics.drawString(font, "左键拖拽平移 · 右键拖拽旋转 · 滚轮缩放 · ESC 返回星图",
+            graphics.drawString(font, Component.translatable("gui.deepspace.galaxy_view.hint"),
                     contentLeft() + 4, 21, 0xFFAAAFC0, false);
         }
         drawFrame(graphics);
@@ -142,6 +142,7 @@ public final class SolarSystemScreen extends Screen {
                 drawPlanetInfo(graphics, hovered, mouseX, mouseY);
             }
         }
+        DeepSpaceManualButton.render(this, graphics, mouseX, mouseY);
     }
 
     /** Keeps the current galaxy selected while switching between its visual map and planet ratings. */
@@ -540,6 +541,10 @@ public final class SolarSystemScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && DeepSpaceManualButton.contains(this, mouseX, mouseY)) {
+            minecraft.setScreen(new DeepSpaceManualScreen(this));
+            return true;
+        }
         if (button == 0 && selectMode(mouseX, mouseY)) {
             return true;
         }

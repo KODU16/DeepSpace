@@ -58,8 +58,15 @@ public final class SkyTransitionRenderer {
             Camera camera,
             Frustum frustum
     ) {
-        int argb = SkyTransitionState.sampleArgb();
+        SkyTransitionState.Sample sample = SkyTransitionState.sample();
+        int argb = sample.argb();
         if ((argb >>> 24) == 0) {
+            return;
+        }
+
+        if (sample.skybox()) {
+            // The planet exit uses the same six textures and orientation as galaxy space.
+            SpaceSkyboxRenderer.renderTransition(frustumMatrix, projectionMatrix, (argb >>> 24) / 255.0F);
             return;
         }
 

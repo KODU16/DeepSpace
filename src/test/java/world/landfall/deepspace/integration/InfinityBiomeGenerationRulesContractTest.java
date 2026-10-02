@@ -11,6 +11,7 @@ public final class InfinityBiomeGenerationRulesContractTest {
 
     public static void main(String[] args) throws IOException {
         int oceanOnly = 0;
+        int oceanDominant = 0;
         int landOnly = 0;
         int mixed = 0;
         for (long seed = 0; seed < 100_000; seed++) {
@@ -32,13 +33,17 @@ public final class InfinityBiomeGenerationRulesContractTest {
                 require(plan.landPercent() == 100, "Land-only planets must have full land");
             } else {
                 mixed++;
-                require(plan.landPercent() >= 10 && plan.landPercent() <= 90,
+                if (plan.landPercent() < 50) oceanDominant++;
+                require((plan.landPercent() >= 10 && plan.landPercent() < 50)
+                                || (plan.landPercent() >= 65 && plan.landPercent() <= 90),
                         "Mixed planet ratio must preserve both biome roles");
             }
         }
-        require(inRange(oceanOnly, 9_000, 11_000), "No-land probability drifted from 10%");
-        require(inRange(landOnly, 9_000, 11_000), "No-ocean probability drifted from 10%");
-        require(inRange(mixed, 78_000, 82_000), "Mixed probability drifted from 80%");
+        // Ocean-majority compositions should remain rare across many deterministic seeds.
+        require(inRange(oceanOnly, 700, 1_300), "No-land probability drifted from 1%");
+        require(inRange(oceanDominant, 3_500, 4_500), "Mixed ocean-majority probability drifted from 4%");
+        require(inRange(landOnly, 19_000, 21_000), "No-ocean probability drifted from 20%");
+        require(inRange(mixed, 78_000, 82_000), "Mixed probability drifted from 79%");
 
         require("minecraft:overworld".equals(InfinityGeneratorPolicy.resolveNoiseSettings(
                         true,

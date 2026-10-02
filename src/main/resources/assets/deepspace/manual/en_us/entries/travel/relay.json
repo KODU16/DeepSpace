@@ -1,0 +1,15 @@
+{
+  "name": "Hyper Relays",
+  "category": "travel",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "Connecting Galaxies",
+      "text": "Hyper relays connect different galaxies. Once explored, relay connections appear as routes on the galaxy map."
+    },
+    {
+      "title": "Preparing Your Ship",
+      "text": "Bring the moving physical structure close to a relay before initiating a jump. Passengers can resume control once the destination and structure are ready."
+    }
+  ]
+}

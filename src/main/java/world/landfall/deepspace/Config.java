@@ -25,6 +25,10 @@ public class Config {
     public static final ModConfigSpec.DoubleValue GENERATED_PLANET_TEXTURE_FRAGMENTATION = BUILDER
             .comment("Controls procedural planet continent fragmentation: 0 creates broad masses, 1 creates many smaller regions.")
             .defineInRange("generatedPlanetTextureFragmentation", 0.35, 0.0, 1.0);
+    // All planet surfaces use this transfer plane, including planets already present in a save.
+    public static final ModConfigSpec.IntValue PLANET_ATMOSPHERE_HEIGHT = BUILDER
+            .comment("Planet atmosphere exit height in blocks. Applies to every planet, including existing saves.")
+            .defineInRange("planetAtmosphereHeight", 550, 64, 4096);
     public static final ModConfigSpec.DoubleValue NIGHT_SKY_PLANET_MIN_FRACTION = BUILDER
             .comment("Minimum fraction of other planets selected for each surface night sky.")
             .defineInRange("nightSkyPlanetMinFraction", 0.3, 0.0, 1.0);

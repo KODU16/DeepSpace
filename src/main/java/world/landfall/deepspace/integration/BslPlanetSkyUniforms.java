@@ -11,6 +11,9 @@ public final class BslPlanetSkyUniforms {
     }
 
     public static void register(UniformHolder uniforms) {
+        // BSL can draw a procedural moon without any vanilla or Infinity moon mesh.
+        uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "deepspaceSuppressMoon",
+                () -> world.landfall.deepspace.render.NightSkyPlanetRenderer.shouldRemoveVanillaMoon() ? 1.0F : 0.0F);
         // BSL procedural clouds bypass LevelRenderer.renderClouds entirely.
         uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "deepspaceCloudsDisabled",
                 () -> world.landfall.deepspace.client.PlanetCloudPolicy.suppressClouds() ? 1.0F : 0.0F);

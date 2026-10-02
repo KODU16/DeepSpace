@@ -1,0 +1,11 @@
+{
+  "name": "Surface Scanning",
+  "category": "maps",
+  "sortnum": 2,
+  "pages": [
+    {
+      "title": "How Planet Scanning Works",
+      "text": "Planet textures are sampled from terrain. The first encounter with a planet takes time to generate detailed surface textures and information, which may cause stuttering. Once complete, subsequent encounters do not require another scan."
+    }
+  ]
+}

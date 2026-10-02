@@ -1,11 +1,13 @@
 package world.landfall.deepspace.network;
 
+import com.mojang.logging.LogUtils;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.server.HyperRelayJumpManager;
@@ -25,6 +27,11 @@ public record HyperRelayJumpRequestPacket() implements CustomPacketPayload {
             }
             SubLevel subLevel = SubLevelEvents.findTrackedSubLevelInRidingGraph(player);
             if (subLevel == null || player.serverLevel() == null) {
+                // Reply to invalid requests instead of leaving the client with a stale preparation indicator.
+                PacketDistributor.sendToPlayer(player,
+                        new HyperRelayJumpStatusPacket(false, Double.POSITIVE_INFINITY, 0));
+                LogUtils.getLogger().info("[DEEPSPACE-JUMP] phase=REJECTED reason=no_tracked_sublevel player={}",
+                        player.getUUID());
                 return;
             }
             HyperRelayJumpManager.tryStartJump(player.getServer(), player.serverLevel(), subLevel);

@@ -1,0 +1,15 @@
+{
+  "name": "Galaxy Map",
+  "category": "maps",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "Nodes and Routes",
+      "text": "The galaxy map records discovered galaxies. Green marks your current galaxy; unknown destinations remain hidden until explored, and connecting lines show known hyper relay routes."
+    },
+    {
+      "title": "Controls",
+      "text": "Drag the map to pan and scroll to zoom around the cursor. Click an explored node to open its galaxy view."
+    }
+  ]
+}

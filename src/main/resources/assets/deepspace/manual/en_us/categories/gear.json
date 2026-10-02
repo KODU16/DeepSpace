@@ -1,0 +1,9 @@
+{
+  "name": "Equipment and Survival",
+  "description": "Information displays and oxygen",
+  "icon": "helmet",
+  "sortnum": 4,
+  "manual_entries": [
+    "helmet"
+  ]
+}

@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import world.landfall.deepspace.Config;
 import world.landfall.deepspace.Deepspace;
 
 import java.util.Collection;
@@ -29,6 +30,7 @@ public class Planet {
     public static final int AUTOMATIC_ATMOSPHERE_HEIGHT = Integer.MIN_VALUE;
     private static final int DEFAULT_ATMOSPHERE_SKY_COLOR = 0x78A7FF;
     private static final int SPACE_EXIT_OFFSET = 10;
+    private static final int PLANET_ENTRY_HEIGHT = 400;
 
     /** Selects how far temporary terrain generation advances before colors are sampled. */
     public enum TextureGenerationDetail {
@@ -489,18 +491,14 @@ public class Planet {
         return updated;
     }
 
-    /** Resolves legacy planets against their actual runtime dimension height. */
+    /** Lands every planet transfer at Y=400, below the configurable exit boundary. */
     public int resolveAtmosphereEntryHeight(int runtimeMaxBuildHeight) {
-        return atmosphereEntryHeight == AUTOMATIC_ATMOSPHERE_HEIGHT
-                ? runtimeMaxBuildHeight - 1
-                : atmosphereEntryHeight;
+        return Math.min(PLANET_ENTRY_HEIGHT, Config.PLANET_ATMOSPHERE_HEIGHT.get() - SPACE_EXIT_OFFSET - 1);
     }
 
-    /** Resolves legacy planets against their actual runtime dimension height. */
+    /** Resolves the shared atmosphere exit plane independently of dimension build height. */
     public int resolveAtmosphereExitHeight(int runtimeMaxBuildHeight) {
-        return atmosphereExitHeight == AUTOMATIC_ATMOSPHERE_HEIGHT
-                ? runtimeMaxBuildHeight + SPACE_EXIT_OFFSET
-                : atmosphereExitHeight;
+        return Config.PLANET_ATMOSPHERE_HEIGHT.get();
     }
 
     private Optional<ResourceLocation> getSingleTexture() {

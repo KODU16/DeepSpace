@@ -41,20 +41,17 @@ public class Deepspace {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
     public static final Supplier<CreativeModeTab> TAB = CREATIVE_MODE_TABS.register("deepspace", () -> CreativeModeTab.builder()
             .displayItems((params, output) -> {
-                output.accept(ModItems.JETPACK_ITEM);
-                output.accept(ModItems.CREATIVE_JETPACK_ITEM.get());
-                output.accept(ModItems.JET_HELMET_ITEM);
-                output.accept(ModItems.CREATIVE_JET_HELMET_ITEM.get());
-                output.accept(ModItems.ROCKET_BOOSTER_ITEM);
+                output.accept(ModItems.DEEPSPACE_HELMET);
                 output.accept(ModItems.DEEPSPACE_TERMINAL_ITEM);
-                output.accept(ModItems.ANGEL_BLOCK_ITEM);
-                output.accept(ModItems.OXYGENATOR_BLOCK_ITEM);
-                output.accept(ModItems.OXYGEN_BUCKET);
+                // Expose the relay engine with its authored model in the creative tab.
+                output.accept(ModItems.HYPER_RELAY_ENGINE_ITEM);
+                // Oxygen equipment remains registered but is temporarily absent from creative inventory.
                 // Include the plant and its produce in the creative tab.
                 output.accept(ModItems.STAR_BRAMBLE_ITEM);
                 output.accept(ModItems.STARBULB_ITEM);
             })
-            .icon(ModItems.ANGEL_BLOCK_ITEM::toStack)
+            // The terminal remains the tab icon after removing the angel block.
+            .icon(ModItems.DEEPSPACE_TERMINAL_ITEM::toStack)
             .title(Component.translatable("menu.deepspace.creative_mode_tab"))
             .build());
     // The constructor for the mod class is the first code that is run when your mod is loaded.
@@ -82,6 +79,7 @@ public class Deepspace {
         ModPlantTypes.register(modEventBus);
         ModArmorMaterials.register(modEventBus);
         ModItems.register(modEventBus);
+        ModRecipes.register(modEventBus);
         ModBlockEntities.register(modEventBus);
         ModAttatchments.register(modEventBus);
         // Dimension generator codecs must exist before level stems are decoded.

@@ -1,0 +1,10 @@
+{
+  "name": "星球与栖息地",
+  "description": "地表、环世界与评级",
+  "icon": "planet",
+  "sortnum": 2,
+  "manual_entries": [
+    "paradise",
+    "rings"
+  ]
+}

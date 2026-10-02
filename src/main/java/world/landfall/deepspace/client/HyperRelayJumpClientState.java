@@ -1,6 +1,7 @@
 package world.landfall.deepspace.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -20,11 +21,13 @@ public final class HyperRelayJumpClientState {
     private static volatile boolean inRange;
     private static volatile double distance = Double.POSITIVE_INFINITY;
     private static volatile int countdownTicks;
+    private static ClientLevel statusLevel;
 
     private HyperRelayJumpClientState() {
     }
 
     public static void acceptStatus(HyperRelayJumpStatusPacket packet) {
+        statusLevel = Minecraft.getInstance().level;
         inRange = packet.inRange();
         distance = packet.distance();
         countdownTicks = packet.countdownTicks();
@@ -32,6 +35,14 @@ public final class HyperRelayJumpClientState {
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // Preparation acknowledgements belong to one world and must not survive logout or a dimension change.
+        if (Minecraft.getInstance().level == null || Minecraft.getInstance().level != statusLevel) {
+            statusLevel = Minecraft.getInstance().level;
+            inRange = false;
+            distance = Double.POSITIVE_INFINITY;
+            countdownTicks = 0;
+            return;
+        }
         if (countdownTicks > 0) {
             countdownTicks--;
         }

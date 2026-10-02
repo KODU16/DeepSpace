@@ -100,7 +100,7 @@ public class LushPlantBlock extends DoublePlantBlock {
 
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
-        // Harvested plants only regrow on natural Infinite S-grade habitats.
+        // Harvested plants regrow in eligible Infinite or Dacha S-grade habitats.
         if (state.getValue(HALF) == DoubleBlockHalf.LOWER && !state.getValue(MATURE)
                 && isStarBrambleHabitat(level)) {
             setMature(level, pos, true);
@@ -138,7 +138,7 @@ public class LushPlantBlock extends DoublePlantBlock {
         return new ItemStack(ModItems.STAR_BRAMBLE_ITEM.get());
     }
 
-    /** Mature fruiting is limited to natural Infinite S-grade planets. */
+    /** Placement, regrowth and withering share the same S-grade habitat policy. */
     private static boolean isStarBrambleHabitat(Level level) {
         return ParadiseRating.supportsStarBramble(PlanetRegistry.getPlanetByDimension(level.dimension()));
     }

@@ -23,19 +23,37 @@ public final class PlanetSurfaceMapCache extends SavedData {
 
     /** Restore the highest completed tier before the first client synchronization. */
     public static void restore(MinecraftServer server, Collection<Planet> planets) {
+        PlanetSurfaceMapCache cache = get(server);
         for (Planet planet : planets) {
             short[] pixels = find(server, planet);
             if (pixels != null && planet.getTexture().isEmpty()) {
                 PlanetTextureTier current = planet.getGeneratedTextureTier();
                 if (current == null || pixels.length >= current.pixels()) planet.setGeneratedSurfaceMap(pixels);
             }
-            Metadata saved = get(server).metadata.get(cacheKey(planet));
+            String key = cacheKey(planet);
+            Metadata saved = cache.metadata.get(key);
             if (saved != null) {
-                planet.setPlanetTypeBiome(saved.planetTypeBiome);
+                String type = saved.planetTypeBiome;
+                if (saved.complete && !saved.biomes.isEmpty()) {
+                    // Reclassify old caches from all sampled columns without regenerating saved terrain.
+                    Map<String, Integer> counts = new TreeMap<>();
+                    saved.biomes.forEach(sample -> counts.merge(sample.id(), sample.count(), Integer::sum));
+                    type = PlanetBiomeType.dominant(counts);
+                    if (!type.equals(saved.planetTypeBiome)) {
+                        cache.metadata.put(key, new Metadata(type, saved.biomes, saved.fluids, saved.blocks, true));
+                        cache.setDirty();
+                    }
+                }
+                planet.setPlanetTypeBiome(type);
                 planet.setSurfaceSamples(saved.biomes, saved.fluids, saved.blocks);
                 planet.setSurfaceScanStatus(saved.complete
                         ? Planet.SurfaceScanStatus.COMPLETE
                         : Planet.SurfaceScanStatus.UNKNOWN);
+                if (saved.complete) {
+                    // Metadata-only planets also restore their finished counters after login or dimension changes.
+                    int chunks = PlanetTextureTier.FULL.chunks();
+                    planet.setSurfaceScanProgress(chunks, chunks);
+                }
             }
         }
     }
@@ -80,9 +98,14 @@ public final class PlanetSurfaceMapCache extends SavedData {
         cache.setDirty();
     }
 
-    /** Version two separates dimensions and invalidates obsolete type and material metadata. */
+    /** Ring strips use a new key because the same 600 samples now form a 75x8 rectangle. */
     private static String cacheKey(Planet planet) {
-        return planet.getId() + "#" + planet.getDimension().location() + "#atlas3x2_v2#"
+        // Dacha's old grid atlas and resumable scans cannot be reused after the continuous-noise rewrite.
+        boolean dacha = "deepspace".equals(planet.getDimension().location().getNamespace())
+                && planet.getDimension().location().getPath().startsWith("dacha_");
+        return planet.getId() + "#" + planet.getDimension().location()
+                + (dacha ? "#dacha_noise_features_v3" : "")
+                + (planet.isRingWorldEdge() ? "#ringstrip75x8_v3#" : "#atlas3x2_v2#")
                 + planet.getTextureGenerationDetail().name().toLowerCase(java.util.Locale.ROOT);
     }
 

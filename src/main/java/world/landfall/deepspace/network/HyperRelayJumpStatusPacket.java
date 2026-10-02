@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.client.HyperRelayJumpClientState;
 
-/** Server -> client jump status used to render the control-seat hyper-relay button and countdown. */
+/** Server-confirmed status: -1 prepares the destination, 0 is idle, positive ticks count down the jump. */
 public record HyperRelayJumpStatusPacket(boolean inRange, double distance, int countdownTicks)
         implements CustomPacketPayload {
     public static final Type<HyperRelayJumpStatusPacket> TYPE =

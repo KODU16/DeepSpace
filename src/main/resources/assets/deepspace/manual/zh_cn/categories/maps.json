@@ -1,0 +1,11 @@
+{
+  "name": "星图与发现",
+  "description": "认识星系和行星",
+  "icon": "map",
+  "sortnum": 1,
+  "manual_entries": [
+    "star_map",
+    "galaxy_view",
+    "scanning"
+  ]
+}

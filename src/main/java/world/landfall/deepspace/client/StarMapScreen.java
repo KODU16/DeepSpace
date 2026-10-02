@@ -133,6 +133,7 @@ public final class StarMapScreen extends Screen {
         graphics.fill(0, 0, width, HEADER_HEIGHT, 0xEE242018);
         graphics.drawCenteredString(font, title, width / 2, 8, 0xFFFFFFFF);
         graphics.drawString(font, Component.translatable("gui.deepspace.star_map.hint"), VIEW_MARGIN + 4, 21, 0xFFAAA38F, false);
+        DeepSpaceManualButton.render(this, graphics, mouseX, mouseY);
     }
 
     private void drawFrame(GuiGraphics graphics) {
@@ -324,6 +325,10 @@ public final class StarMapScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && DeepSpaceManualButton.contains(this, mouseX, mouseY)) {
+            minecraft.setScreen(new DeepSpaceManualScreen(this));
+            return true;
+        }
         if (button == 0 && mouseY >= HEADER_HEIGHT && mouseY <= height - VIEW_MARGIN) {
             for (Map.Entry<String, StarMapGraphLayout.Node> entry : layout.nodes().entrySet()) {
                 if (!entry.getValue().explored() || !isNodeHovered(entry.getKey(), mouseX, mouseY)) {

@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import world.landfall.deepspace.physics.EntityGravityRegistry;
 
 /**
- * Applies dimension-specific multipliers to every vanilla entity's native gravity.
+ * Removes galaxy gravity without changing persistent NoGravity flags or a planet's native acceleration.
  */
 @Mixin(value = Entity.class, remap = false)
 public abstract class MixinEntityGravity {

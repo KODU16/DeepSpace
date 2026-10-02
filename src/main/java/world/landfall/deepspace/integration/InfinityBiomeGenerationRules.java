@@ -74,7 +74,8 @@ public final class InfinityBiomeGenerationRules {
         CompoundTag source = new CompoundTag();
         source.putString("type", "minecraft:multi_noise");
         ListTag biomes = new ListTag();
-        double boundary = 1.0 - plan.landPercent() / 50.0;
+        // Continentalness is concentrated below zero in sampled Infinity terrain, so a linear range split overproduces ocean.
+        double boundary = -0.8 + (90.0 - plan.landPercent()) / 250.0;
         if (oceanBiome != null) {
             biomes.add(multiNoiseEntry(oceanBiome, -1.0, boundary));
         }

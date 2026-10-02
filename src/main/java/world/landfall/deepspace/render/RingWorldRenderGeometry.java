@@ -92,6 +92,22 @@ public final class RingWorldRenderGeometry {
         return false;
     }
 
+    /** Measures a vertex along its section's outward axis in the unrotated Gecko model. */
+    static double guiOutwardCoordinate(int sectionIndex, double x, double z) {
+        return switch (sectionIndex) {
+            case 0 -> -x;
+            case 1 -> z;
+            case 2 -> x;
+            case 3 -> -z;
+            default -> throw new IllegalArgumentException("Unknown ring-world section " + sectionIndex);
+        };
+    }
+
+    /** Omits only the outer wall; end caps span both sides and remain visible. */
+    static boolean guiInteriorFrameFace(double minimumOutwardCoordinate) {
+        return minimumOutwardCoordinate < 644.0D / 16.0D;
+    }
+
     /** Far-depth local geometry draws its frame first so the visible world surface cannot hide it. */
     static boolean surfaceAfterFrame(boolean skyFallback) {
         return skyFallback;

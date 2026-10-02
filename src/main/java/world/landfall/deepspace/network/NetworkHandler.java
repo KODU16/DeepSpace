@@ -53,20 +53,15 @@ public class NetworkHandler {
                 SubLevelTransferProbePacket.STREAM_CODEC,
                 SubLevelTransferProbePacket::handle
         );
+        registrar.playToClient(
+                SubLevelTransferCompletePacket.TYPE,
+                SubLevelTransferCompletePacket.STREAM_CODEC,
+                SubLevelTransferCompletePacket::handle
+        );
         registrar.playToServer(
                 SubLevelTransferProbeReplyPacket.TYPE,
                 SubLevelTransferProbeReplyPacket.STREAM_CODEC,
                 SubLevelTransferProbeReplyPacket::handle
-        );
-        registrar.playToServer(
-                JetpackPacket.RocketForward.TYPE,
-                JetpackPacket.RocketForward.STREAM_CODEC,
-                JetpackPacket.RocketForward::handle
-        );
-        registrar.playToServer(
-                JetpackPacket.BeginFlying.TYPE,
-                JetpackPacket.BeginFlying.STREAM_CODEC,
-                JetpackPacket.BeginFlying::handle
         );
         registrar.playToServer(
                 HyperRelayJumpRequestPacket.TYPE,

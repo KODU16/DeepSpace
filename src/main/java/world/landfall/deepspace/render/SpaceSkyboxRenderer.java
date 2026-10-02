@@ -43,6 +43,8 @@ public final class SpaceSkyboxRenderer {
     };
     private static final RenderType[] NATIVE_RENDER_TYPES = createNativeRenderTypes();
     private static final RenderType[] IRIS_RENDER_TYPES = createIrisRenderTypes();
+    private static final RenderType[] NATIVE_FADE_RENDER_TYPES = createFadeRenderTypes(false);
+    private static final RenderType[] IRIS_FADE_RENDER_TYPES = createFadeRenderTypes(true);
     private static final StaticRenderMesh[] NATIVE_MESHES = new StaticRenderMesh[FACES.length];
     private static final StaticRenderMesh[] IRIS_MESHES = new StaticRenderMesh[FACES.length];
 
@@ -118,6 +120,37 @@ public final class SpaceSkyboxRenderer {
         return renderTypes;
     }
 
+    /** Reuses the opaque skybox meshes with alpha blending during atmosphere exit. */
+    private static RenderType[] createFadeRenderTypes(boolean irisEnabled) {
+        RenderType[] renderTypes = new RenderType[FACES.length];
+        for (int index = 0; index < FACES.length; index++) {
+            ResourceLocation texture = FACES[index].texture();
+            var state = RenderType.CompositeState.builder()
+                    .setShaderState(irisEnabled
+                            ? RenderStateShard.RENDERTYPE_ENTITY_SOLID_SHADER
+                            : RenderStateShard.POSITION_TEX_SHADER)
+                    .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
+                    .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+                    .setDepthTestState(RenderStateShard.NO_DEPTH_TEST)
+                    .setCullState(RenderStateShard.NO_CULL)
+                    .setWriteMaskState(RenderStateShard.COLOR_WRITE)
+                    .setLightmapState(irisEnabled ? RenderStateShard.LIGHTMAP : RenderStateShard.NO_LIGHTMAP)
+                    .setOverlayState(irisEnabled ? RenderStateShard.OVERLAY : RenderStateShard.NO_OVERLAY)
+                    .setOutputState(irisEnabled ? IrisIntegration.IRIS_TARGET : RenderStateShard.MAIN_TARGET)
+                    .createCompositeState(true);
+            renderTypes[index] = RenderType.create(
+                    "deepspace_space_skybox_fade_" + (irisEnabled ? "iris_" : "native_") + index,
+                    irisEnabled ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX,
+                    VertexFormat.Mode.TRIANGLES,
+                    512,
+                    false,
+                    false,
+                    state
+            );
+        }
+        return renderTypes;
+    }
+
     public static void render(
             VeilRenderLevelStageEvent.Stage stage,
             LevelRenderer levelRenderer,
@@ -138,6 +171,19 @@ public final class SpaceSkyboxRenderer {
             return;
         }
 
+        drawSkybox(frustumMatrix, projectionMatrix, 1.0F, false);
+    }
+
+    /** Blends the galaxy skybox over an atmospheric planet as the exit boundary approaches. */
+    static void renderTransition(Matrix4fc frustumMatrix, Matrix4fc projectionMatrix, float alpha) {
+        if (alpha <= 0.0F || Minecraft.getInstance().level == null
+                || PlanetRegistry.getPlanetByDimension(Minecraft.getInstance().level.dimension()) == null) {
+            return;
+        }
+        drawSkybox(frustumMatrix, projectionMatrix, alpha, true);
+    }
+
+    private static void drawSkybox(Matrix4fc frustumMatrix, Matrix4fc projectionMatrix, float alpha, boolean fading) {
         // Keep every cube corner inside the far plane; 0.5 * far is conservative for sqrt(3) corners.
         float radius = Math.max(16.0F, Minecraft.getInstance().gameRenderer.getDepthFar() * 0.45F);
         boolean irisEnabled = IrisIntegration.isShaderPackEnabled();
@@ -146,12 +192,16 @@ public final class SpaceSkyboxRenderer {
                 .rotateZ(GALACTIC_CORE_TO_ZENITH_RADIANS)
                 .scale(radius);
         Matrix4f projection = new Matrix4f(projectionMatrix);
-        RenderType[] renderTypes = irisEnabled ? IRIS_RENDER_TYPES : NATIVE_RENDER_TYPES;
+        RenderType[] renderTypes = fading
+                ? (irisEnabled ? IRIS_FADE_RENDER_TYPES : NATIVE_FADE_RENDER_TYPES)
+                : (irisEnabled ? IRIS_RENDER_TYPES : NATIVE_RENDER_TYPES);
         // 天空盒在远裁剪面附近，原版雾会把它染成纯黑，所以绘制期间关掉雾。
         float fogStart = RenderSystem.getShaderFogStart();
         float fogEnd = RenderSystem.getShaderFogEnd();
+        float[] shaderColor = RenderSystem.getShaderColor().clone();
         RenderSystem.setShaderFogStart(1_000_000.0F);
         RenderSystem.setShaderFogEnd(1_000_001.0F);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, alpha);
         try {
             for (int faceIndex = 0; faceIndex < FACES.length; faceIndex++) {
                 mesh(faceIndex, irisEnabled).draw(
@@ -161,6 +211,7 @@ public final class SpaceSkyboxRenderer {
         } finally {
             RenderSystem.setShaderFogStart(fogStart);
             RenderSystem.setShaderFogEnd(fogEnd);
+            RenderSystem.setShaderColor(shaderColor[0], shaderColor[1], shaderColor[2], shaderColor[3]);
         }
     }
 

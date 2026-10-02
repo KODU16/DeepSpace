@@ -36,6 +36,9 @@ public class PlanetTeleportHandler {
     private static final Logger LOGGER = LogUtils.getLogger();
     public static final int SPACE_DISTANCE_FROM_CEILING = 10;
     private static final Map<UUID, PreparedTransition> PREPARED_TRANSITIONS = new HashMap<>();
+    // Preserve the contacted body's landing point while its single arrival chunk is generated.
+    private static final Map<UUID, PendingPlanetContact> PENDING_PLANET_CONTACTS = new HashMap<>();
+    private record PendingPlanetContact(Planet planet, Vec3 landing) {}
     private static final Map<UUID, SkySyncState> LAST_SKY_SYNC = new HashMap<>();
     // 只记录每个玩家最后一次规划的虫洞出口，避免在虫洞附近每 tick 重复写日志。
     private static final Map<UUID, String> LAST_WORMHOLE_EXIT_PLAN = new HashMap<>();
@@ -46,6 +49,16 @@ public class PlanetTeleportHandler {
             return;
         }
 
+        PendingPlanetContact contact = PENDING_PLANET_CONTACTS.get(player.getUUID());
+        if (contact != null) {
+            if (player.level().dimension().equals(contact.planet().getGalaxy())
+                    && SubLevelEvents.findTrackedSubLevelInRidingGraph(player) == null) {
+                // Contact remains accepted if flight crosses the model before the chunk is ready.
+                finishPlanetContact(player, contact);
+                return;
+            }
+            PENDING_PLANET_CONTACTS.remove(player.getUUID());
+        }
         Planet currentPlanet = PlanetUtils.getPlayerPlanet(player);
         Vec3 transitionPosition = getTransitionPosition(player);
         if (currentPlanet != null) {
@@ -62,9 +75,17 @@ public class PlanetTeleportHandler {
     }
 
     @SubscribeEvent
+    public static void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
+        // Neither accepted contacts nor pre-contact landings belong to the next server session.
+        PENDING_PLANET_CONTACTS.clear();
+        PREPARED_TRANSITIONS.clear();
+    }
+
+    @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID playerId = event.getEntity().getUUID();
         PREPARED_TRANSITIONS.remove(playerId);
+        PENDING_PLANET_CONTACTS.remove(playerId);
         LAST_SKY_SYNC.remove(playerId);
         LAST_WORMHOLE_EXIT_PLAN.remove(playerId);
     }
@@ -80,7 +101,8 @@ public class PlanetTeleportHandler {
                     () -> calculatePlanetExitLocation(player.position(), planet),
                     0x000000
             );
-            syncSkyTransition(player, progress, prepared == null ? 0x000000 : prepared.skyColor);
+            // Fade the galaxy skybox in as the player rises through the atmosphere.
+            syncSkyTransition(player, progress, prepared == null ? 0x000000 : prepared.skyColor, true);
         } else {
             clearTransition(player);
         }
@@ -187,7 +209,8 @@ public class PlanetTeleportHandler {
                 syncSkyTransition(
                         player,
                         progress,
-                        prepared == null ? planetSkyColor : prepared.skyColor
+                        prepared == null ? planetSkyColor : prepared.skyColor,
+                        false
                 );
             } else {
                 clearTransition(player);
@@ -208,21 +231,33 @@ public class PlanetTeleportHandler {
                 PacketDistributor.sendToPlayer(player, arrival);
             }
         }
-        // The arrival packet above remains wormhole-only; this signal merely hides the loading screen.
+        PendingPlanetContact contact = new PendingPlanetContact(destinationBody, target);
+        PENDING_PLANET_CONTACTS.put(player.getUUID(), contact);
+        finishPlanetContact(player, contact);
+    }
+
+    /** Wait for worldgen on later ticks instead of blocking inside NeoForge's player teleport. */
+    private static void finishPlanetContact(ServerPlayer player, PendingPlanetContact contact) {
+        ServerLevel destination = player.getServer().getLevel(contact.planet().getDimension());
+        Vec3 target = contact.landing();
+        DestinationChunkPreload.request(destination, target);
+        if (!DestinationChunkPreload.isReady(destination, target)) return;
+        // The dimension and position packets are sent only after the exact arrival chunk is ready.
         SeamlessTransitionSignal.begin(player);
         LOGGER.info(
                 "[DEEPSPACE-PLANET-ENTRY] phase=PLAYER_TOUCH_TRANSFER player={} body={} source={} destination={} target={}",
                 player.getUUID(),
-                closestPlanet.getId(),
+                contact.planet().getId(),
                 player.level().dimension().location(),
                 destination.dimension().location(),
                 target
         );
-        player.teleportTo(destination, target.x, target.y, target.z, Set.of(), 0.0F, 0.0F);
-        if (!closestPlanet.isWormhole()) {
+        if (!player.teleportTo(destination, target.x, target.y, target.z, Set.of(), 0.0F, 0.0F)) return;
+        if (!contact.planet().isWormhole()) {
             player.forceAddEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 20 * 120, 1, false, true), null);
         }
         PREPARED_TRANSITIONS.remove(player.getUUID());
+        PENDING_PLANET_CONTACTS.remove(player.getUUID());
     }
 
     /** Prioritizes the actual touched ring edge instead of a neighboring edge with a nearer center. */
@@ -258,24 +293,26 @@ public class PlanetTeleportHandler {
         return prepared;
     }
 
-    private static void syncSkyTransition(ServerPlayer player, float progress, int targetColor) {
+    private static void syncSkyTransition(ServerPlayer player, float progress, int targetColor, boolean skybox) {
         float clamped = Math.max(0.0F, Math.min(1.0F, progress));
         int rgb = targetColor & 0xFFFFFF;
         SkySyncState previous = LAST_SKY_SYNC.get(player.getUUID());
         if (previous != null
                 && previous.targetColor == rgb
+                && previous.skybox == skybox
                 && Math.abs(previous.progress - clamped) < 0.015F) {
             return;
         }
-        LAST_SKY_SYNC.put(player.getUUID(), new SkySyncState(clamped, rgb));
-        PacketDistributor.sendToPlayer(player, new SkyTransitionPacket(clamped, rgb));
+        LAST_SKY_SYNC.put(player.getUUID(), new SkySyncState(clamped, rgb, skybox));
+        PacketDistributor.sendToPlayer(player, new SkyTransitionPacket(clamped, rgb, skybox));
     }
 
     private static void clearTransition(ServerPlayer player) {
         PREPARED_TRANSITIONS.remove(player.getUUID());
         SkySyncState previous = LAST_SKY_SYNC.get(player.getUUID());
         if (previous == null || previous.progress != 0.0F) {
-            syncSkyTransition(player, 0.0F, previous == null ? 0x000000 : previous.targetColor);
+            syncSkyTransition(player, 0.0F, previous == null ? 0x000000 : previous.targetColor,
+                    previous != null && previous.skybox);
         }
     }
 
@@ -345,11 +382,15 @@ public class PlanetTeleportHandler {
             entryX = 0.0;
             entryZ = 0.0;
         }
-        return new Vec3(
+        Vec3 landing = new Vec3(
                 entryX * levelRadius + levelCenter.x,
                 planet.resolveAtmosphereEntryHeight(destination.getMaxBuildHeight()),
                 entryZ * levelRadius + levelCenter.z
         );
+        // Termina uses vanilla End terrain; its inner void ring is not a landing zone.
+        return destination.dimension().equals(Level.END)
+                ? TerminaLandingCoordinates.avoidEmptyInnerRing(landing)
+                : landing;
     }
 
     /** Maps the surface position to a point just above the matching area of the space model. */
@@ -417,6 +458,6 @@ public class PlanetTeleportHandler {
         }
     }
 
-    private record SkySyncState(float progress, int targetColor) {
+    private record SkySyncState(float progress, int targetColor, boolean skybox) {
     }
 }

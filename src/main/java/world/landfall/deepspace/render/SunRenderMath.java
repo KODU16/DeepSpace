@@ -190,6 +190,26 @@ public final class SunRenderMath {
         return alpha << 24 | blue << 16 | green << 8 | red;
     }
 
+    /** Keeps the spectral hue and source detail while adding a soft full-face stellar lift. */
+    public static int brightenSpectralFaceAbgr(int neutralAbgr, int spectralRgb, double u, double v) {
+        double squareRadius = Math.max(Math.abs(u * 2.0D - 1.0D), Math.abs(v * 2.0D - 1.0D));
+        double distance = Math.clamp(squareRadius, 0.0D, 1.0D);
+        double centerLight = 1.0D - distance * distance * (3.0D - 2.0D * distance);
+        double textureDetail = ((neutralAbgr & 0xFF) / 255.0D - 0.5D) * 0.15D;
+        // The center lift offsets the source's bright edges without flattening its fine texture.
+        double surfaceLight = Math.clamp(0.82D + centerLight * 0.14D + textureDetail, 0.0D, 0.98D);
+        double whiteMix = 0.22D + centerLight * 0.08D;
+        int red = brightenedChannel(spectralRgb >>> 16 & 0xFF, surfaceLight, whiteMix);
+        int green = brightenedChannel(spectralRgb >>> 8 & 0xFF, surfaceLight, whiteMix);
+        int blue = brightenedChannel(spectralRgb & 0xFF, surfaceLight, whiteMix);
+        return (neutralAbgr & 0xFF000000) | blue << 16 | green << 8 | red;
+    }
+
+    private static int brightenedChannel(int spectral, double surfaceLight, double whiteMix) {
+        double litSpectral = spectral * surfaceLight;
+        return (int) Math.round(litSpectral + (255.0D - litSpectral) * whiteMix);
+    }
+
     /** Rotates a secondary physical star direction by the same shortest arc that drives the host star's day cycle. */
     public static float[] relativeCelestialDirection(float[] hostPhysical, float[] starPhysical, float[] hostCelestial) {
         float[] from = normalize(hostPhysical);

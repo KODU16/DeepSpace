@@ -16,14 +16,18 @@ public final class BiomeCompositionPolicy {
     public static Composition fromSeed(long seed) {
         Random random = new Random(seed ^ 0x44535042494F4D45L);
         int compositionRoll = random.nextInt(100);
-        if (compositionRoll < 10) {
+        // Reserve five percent of random planets for ocean-dominant compositions.
+        if (compositionRoll < 1) {
             return new Composition(false, true, 0, "ocean");
         }
         String landType = LAND_TYPES.get(random.nextInt(LAND_TYPES.size()));
-        if (compositionRoll < 20) {
+        if (compositionRoll < 5) {
+            return new Composition(true, true, random.nextInt(10, 50), landType);
+        }
+        if (compositionRoll < 25) {
             return new Composition(true, false, 100, landType);
         }
-        return new Composition(true, true, random.nextInt(10, 91), landType);
+        return new Composition(true, true, random.nextInt(65, 91), landType);
     }
 
     public record Composition(boolean hasLand, boolean hasOcean, int landPercent, String landType) {

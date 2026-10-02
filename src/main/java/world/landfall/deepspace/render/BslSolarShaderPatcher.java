@@ -20,6 +20,9 @@ public final class BslSolarShaderPatcher {
             "albedo = mix(desatAlbedo, albedo, desatAmount);";
     private static final String PATCH_MARKER = "DEEPSPACE_BSL_POINT_SOLAR";
     private static final String SKY_PATCH_MARKER = "DEEPSPACE_BSL_PLANET_SKY";
+    private static final String MOON_PATCH_MARKER = "DEEPSPACE_BSL_MANAGED_MOON";
+    private static final Pattern MOON_SIDE = Pattern.compile(
+            "\\bfloat\\s+isMoon\\s*=\\s*float\\s*\\(\\s*VoL\\s*<\\s*0\\.0\\s*\\)\\s*;");
     // Iris expands option macros before this hook; match declarations instead of option text.
     private static final Pattern SKY_COLOR_DECLARATION = Pattern.compile(
             "\\bvec3\\s+(skyCol|fogCol)\\s*=\\s*([^;]+);");
@@ -146,6 +149,9 @@ public final class BslSolarShaderPatcher {
             return null;
         }
 
+        // Procedural moons bypass mesh interception; patch their own contribution before any early return.
+        source = patchProceduralMoon(source);
+
         NON_NULL_SOURCES.incrementAndGet();
         lastSourceLength = source.length();
         if (source.contains(PATCH_MARKER) && source.contains(SKY_PATCH_MARKER)) {
@@ -258,6 +264,23 @@ public final class BslSolarShaderPatcher {
         SKY_PATCHED_SOURCES.incrementAndGet();
         bslSkySourcePatched = true;
         return patched;
+    }
+
+    /** Blocks BSL's procedural lunar disc and halo on managed skies while retaining its sun and night lighting. */
+    private static String patchProceduralMoon(String source) {
+        if (source.contains(MOON_PATCH_MARKER) || !source.contains("void ShaderSunMoon(")) return source;
+        var moon = MOON_SIDE.matcher(source);
+        if (!moon.find()) return source;
+        String guarded = source.substring(0, moon.end()) + """
+
+                // DEEPSPACE_BSL_MANAGED_MOON: actual planets replace procedural lunar scenery.
+                if (deepspaceSuppressMoon > 0.5 && isMoon > 0.5) {
+                    return;
+                }
+                """ + source.substring(moon.end());
+        int insertion = globalDeclarationInsertion(guarded);
+        return guarded.substring(0, insertion) + "\nuniform float deepspaceSuppressMoon;\n"
+                + guarded.substring(insertion);
     }
 
     /** Recolor only the shared sky result, before stars/clouds and fragment output encoding. */

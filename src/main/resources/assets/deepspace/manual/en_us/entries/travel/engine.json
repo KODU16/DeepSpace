@@ -1,0 +1,19 @@
+{
+  "name": "Hyperspace Engine",
+  "category": "travel",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Initiating a Jump",
+      "text": "Place the engine on a Sable sub-level. Within 200 blocks of a relay, apply a redstone pulse to the engine to start a hyperspace jump. After five seconds, you will arrive in a new galaxy."
+    },
+    {
+      "title": "AeroIE Control Seats",
+      "text": "With Aeronautics: Interstellar Expansion installed, AeroIE control seats include a built-in Hyper Relay Engine, so no additional engine is needed. Press the assigned jump key within the same relay range to jump."
+    },
+    {
+      "title": "Status Indicators",
+      "text": "The cyan sections glow when the ship is within jump range. During preparation and the countdown, both cyan and blue sections glow and enchantment particles appear. These indicators do not light the surroundings."
+    }
+  ]
+}

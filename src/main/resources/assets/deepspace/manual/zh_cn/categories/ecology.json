@@ -1,0 +1,9 @@
+{
+  "name": "生态与材料",
+  "description": "植物、方块与流体",
+  "icon": "plant",
+  "sortnum": 5,
+  "manual_entries": [
+    "bramble"
+  ]
+}

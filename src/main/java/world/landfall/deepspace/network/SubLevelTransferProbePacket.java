@@ -10,11 +10,17 @@ import world.landfall.deepspace.client.SubLevelTransferProbeState;
 
 import java.util.UUID;
 
-/** Starts a short client-side observation window for one Sable dimension transfer. */
+/** Starts client observation until the server confirms one Sable dimension transfer. */
 public record SubLevelTransferProbePacket(
         UUID transferId,
         String destinationDimension,
-        UUID expectedSubLevelId
+        UUID expectedSubLevelId,
+        double destinationX,
+        double destinationY,
+        double destinationZ,
+        double sourceX,
+        double sourceY,
+        double sourceZ
 ) implements CustomPacketPayload {
     public static final Type<SubLevelTransferProbePacket> TYPE =
             new Type<>(Deepspace.path("sublevel_transfer_probe"));
@@ -25,13 +31,21 @@ public record SubLevelTransferProbePacket(
         buffer.writeUUID(packet.transferId);
         buffer.writeUtf(packet.destinationDimension);
         buffer.writeNullable(packet.expectedSubLevelId, (target, value) -> target.writeUUID(value));
+        buffer.writeDouble(packet.destinationX);
+        buffer.writeDouble(packet.destinationY);
+        buffer.writeDouble(packet.destinationZ);
+        buffer.writeDouble(packet.sourceX);
+        buffer.writeDouble(packet.sourceY);
+        buffer.writeDouble(packet.sourceZ);
     }
 
     private static SubLevelTransferProbePacket decode(FriendlyByteBuf buffer) {
         return new SubLevelTransferProbePacket(
                 buffer.readUUID(),
                 buffer.readUtf(),
-                buffer.readNullable(target -> target.readUUID())
+                buffer.readNullable(target -> target.readUUID()),
+                buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
+                buffer.readDouble(), buffer.readDouble(), buffer.readDouble()
         );
     }
 

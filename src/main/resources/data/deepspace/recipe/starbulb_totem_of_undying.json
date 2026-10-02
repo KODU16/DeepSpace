@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "deepspace:starbulb" },
+    { "item": "minecraft:yellow_wool" }
+  ],
+  "result": { "id": "minecraft:totem_of_undying", "count": 1 }
+}

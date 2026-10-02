@@ -1,0 +1,10 @@
+{
+  "name": "入门",
+  "description": "从深空终端开始探索",
+  "icon": "terminal",
+  "sortnum": 0,
+  "manual_entries": [
+    "overview",
+    "terminal"
+  ]
+}

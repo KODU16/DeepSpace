@@ -11,6 +11,8 @@ public final class ParadiseRating {
     private static final float WATER_SHARE = 0.08F;
     private static final float STRONG_GREEN_SHARE = 0.22F;
     private static final float ALIEN_SHARE_LIMIT = 0.28F;
+    private static final java.util.regex.Pattern DACHA_SURFACE =
+            java.util.regex.Pattern.compile("dacha_([0-9]+)_planet_[1-6]");
 
     private ParadiseRating() {
     }
@@ -24,7 +26,8 @@ public final class ParadiseRating {
         Planet.ParadiseProfile profile = planet.getParadiseProfile();
         PaletteShares palette = paletteShares(planet.getGeneratedSurfaceColors());
         boolean analog = isOverworldAnalog(planet);
-        boolean hasPalette = palette.total() > 0;
+        // Dacha's fixed recipes already supply complete habitat facts; a partial sea-only scan cannot revoke them.
+        boolean hasPalette = palette.total() > 0 && !isDachaGeneratedWorld(planet);
         boolean greenLand = analog
                 || hasPalette && palette.greenShare() >= GREEN_SHARE
                 || !hasPalette && profile.grassSurface();
@@ -68,11 +71,24 @@ public final class ParadiseRating {
         return new Result(Math.min(100, score), grade(score));
     }
 
-    /** 星藤只在自然算法生成的 Infinite S 级星球上成熟，主世界/Tropica 的类地高分不算栖息地。 */
+    /** Natural Infinite S worlds and the fixed Dacha S habitats support the same plant lifecycle. */
     public static boolean supportsStarBramble(Planet planet) {
         return planet != null
-                && isNaturalInfiniteGeneratedWorld(planet)
+                && (isNaturalInfiniteGeneratedWorld(planet) || isDachaGeneratedWorld(planet))
                 && evaluate(planet).grade() == Grade.S;
+    }
+
+    /** Match the generated surface, planet and host identities together; arbitrary authored worlds remain excluded. */
+    public static boolean isDachaGeneratedWorld(Planet planet) {
+        if (planet == null || planet.isWormhole() || planet.isRingWorldEdge()
+                || PlanetRegistry.isDatapackPlanet(planet.getId())) return false;
+        ResourceLocation surface = planet.getDimension().location();
+        ResourceLocation galaxy = planet.getGalaxy().location();
+        if (!"deepspace".equals(surface.getNamespace()) || !"deepspace".equals(galaxy.getNamespace())) return false;
+        var match = DACHA_SURFACE.matcher(surface.getPath());
+        return match.matches() && planet.getId().equals(surface.getPath())
+                && galaxy.getPath().equals("galaxy_" + match.group(1) + "_dacha")
+                && planet.hasParadiseProfile();
     }
 
     /** Authored, datapack, primary-galaxy and analog worlds are never star-bramble habitats. */

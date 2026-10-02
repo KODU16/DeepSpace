@@ -6,6 +6,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.ArmorMaterials;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -17,8 +19,6 @@ import java.util.function.Supplier;
 
 public class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(Deepspace.MODID);
-    public static final DeferredItem<Item> ANGEL_BLOCK_ITEM = ITEMS.register("angel_block", () -> new AngelBlockItem(new Item.Properties()));
-    public static final DeferredItem<JetpackItem> JETPACK_ITEM = ITEMS.register("jetpack", JetpackItem::new);
     public static final DeferredItem<Item> OXYGENATOR_BLOCK_ITEM = ITEMS.register("oxygenator", OxygenatorBlockItem::new);
     public static final DeferredItem<BucketItem> OXYGEN_BUCKET = ITEMS.register("oxygen_bucket", () ->
             new BucketItem(ModFluids.OXYGEN.get(), new Item.Properties()
@@ -44,24 +44,19 @@ public class ModItems {
     public static final DeferredItem<BlockItem> MOONSTONE_SILICON_ORE_ITEM = ITEMS.registerSimpleBlockItem(ModBlocks.MOONSTONE_SILICON_ORE_BLOCK);
     public static final DeferredItem<BlockItem> HYPER_RELAY_ENGINE_ITEM = ITEMS.registerSimpleBlockItem(ModBlocks.HYPER_RELAY_ENGINE_BLOCK);
 
-    public static final Supplier<ItemStack> CREATIVE_JETPACK_ITEM = () -> {
-        var item = JETPACK_ITEM.toStack();
-        item.set(JetpackItem.JetpackComponent.SUPPLIER, new JetpackItem.JetpackComponent(100, -1));
-
-        return item;
-    };
     public static final DeferredItem<JetHelmetItem> JET_HELMET_ITEM = ITEMS.register("jet_helmet", JetHelmetItem::new);
+    // Iron armor stats and equipment texture are inherited from the vanilla material.
+    public static final DeferredItem<ArmorItem> DEEPSPACE_HELMET = ITEMS.register("deepspace_helmet", () ->
+            new DeepSpaceHelmetItem(new Item.Properties().durability(Items.IRON_HELMET.getMaxDamage(Items.IRON_HELMET.getDefaultInstance()))));
     public static final Supplier<ItemStack> CREATIVE_JET_HELMET_ITEM = () -> {
         var item = JET_HELMET_ITEM.toStack();
         item.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, JetHelmetItem.JetHelmetComponent.creative());
         return item;
     };
-    public static final DeferredItem<RocketBoosterItem> ROCKET_BOOSTER_ITEM = ITEMS.register("rocket_booster", RocketBoosterItem::new);
     // The terminal item opens both the star map and the Paradise Probe.
     public static final DeferredItem<StarMapItem> DEEPSPACE_TERMINAL_ITEM =
             ITEMS.register("deepspace_terminal", StarMapItem::new);
     public static void register(IEventBus eventBus) {
-        JetpackItem.JetpackComponent.register(eventBus);
         JetHelmetItem.JetHelmetComponent.register(eventBus);
         eventBus.addListener(ModItems::registerCapabilities);
 

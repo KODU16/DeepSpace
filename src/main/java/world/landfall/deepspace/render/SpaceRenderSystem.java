@@ -35,6 +35,10 @@ public class SpaceRenderSystem {
         // The host star is the final celestial pass, so its opaque surface covers the opposite surface ring.
         SunRenderer.init();
         registerRenderer((stage, levelRenderer, bufferSource, matrixStack, frustumMatrix, projectionMatrix,
+                          renderTick, partialTicks, camera, frustum) ->
+                        HyperRelayGeoRenderer.renderGalaxyParticles(camera, frustumMatrix, projectionMatrix),
+                BACKGROUND_STAGE);
+        registerRenderer((stage, levelRenderer, bufferSource, matrixStack, frustumMatrix, projectionMatrix,
                           renderTick, partialTicks, camera, frustum) -> GalaxyLogDepth.end(), BACKGROUND_STAGE);
         // Celestial bodies share depth with each other, then release it before terrain and every entity pass.
         registerRenderer((stage, levelRenderer, bufferSource, matrixStack, frustumMatrix, projectionMatrix,

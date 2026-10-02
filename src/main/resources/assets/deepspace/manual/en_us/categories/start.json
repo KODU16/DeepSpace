@@ -1,0 +1,10 @@
+{
+  "name": "Getting Started",
+  "description": "Begin exploring with the DeepSpace Terminal",
+  "icon": "terminal",
+  "sortnum": 0,
+  "manual_entries": [
+    "overview",
+    "terminal"
+  ]
+}

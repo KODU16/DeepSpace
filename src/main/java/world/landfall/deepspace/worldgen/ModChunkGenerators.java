@@ -25,6 +25,10 @@ public final class ModChunkGenerators {
     private ModChunkGenerators() {
     }
 
+    // Authored Dacha terrain must survive generator serialization and reconnects.
+    public static final DeferredHolder<MapCodec<? extends ChunkGenerator>, MapCodec<DachaChunkGenerator>> DACHA =
+            CHUNK_GENERATORS.register("dacha", () -> DachaChunkGenerator.CODEC);
+
     public static void register(IEventBus eventBus) {
         CHUNK_GENERATORS.register(eventBus);
     }

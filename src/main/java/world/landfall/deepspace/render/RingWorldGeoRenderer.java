@@ -13,11 +13,15 @@ import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.cache.object.GeoQuad;
 import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.renderer.GeoObjectRenderer;
 import software.bernie.geckolib.util.GeckoLibUtil;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.planet.RingWorldDamage;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 /** Renders the static, complete GeckoLib ring without entity-centering transforms. */
 final class RingWorldGeoRenderer extends GeoObjectRenderer<RingWorldGeoRenderer.StaticRingWorld> {
@@ -27,7 +31,10 @@ final class RingWorldGeoRenderer extends GeoObjectRenderer<RingWorldGeoRenderer.
     private static final StaticRingWorld ANIMATABLE = new StaticRingWorld();
     private static final RingWorldGeoRenderer INSTANCE = new RingWorldGeoRenderer();
     private static final StaticRenderMesh[] MESHES = new StaticRenderMesh[1 << RingWorldDamage.SECTION_COUNT];
+    private static final StaticRenderMesh[] GUI_INTERIOR_MESHES = new StaticRenderMesh[1 << RingWorldDamage.SECTION_COUNT];
     private int brokenSections;
+    private boolean guiInteriorOnly;
+    private int guiSectionIndex = -1;
 
     private RingWorldGeoRenderer() {
         super(new StaticRingWorldModel());
@@ -54,11 +61,27 @@ final class RingWorldGeoRenderer extends GeoObjectRenderer<RingWorldGeoRenderer.
         mesh.draw(renderType, poseStack);
     }
 
+    /** Uses a separate GUI mesh without the outer radial wall; world meshes retain both sides. */
+    static void drawGuiInterior(PoseStack poseStack, RenderType renderType, int packedLight, int brokenSections) {
+        int sectionMask = brokenSections & (GUI_INTERIOR_MESHES.length - 1);
+        StaticRenderMesh mesh = GUI_INTERIOR_MESHES[sectionMask];
+        if (mesh == null) {
+            mesh = new StaticRenderMesh(DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 786432,
+                    builder -> buildMesh(builder, renderType, packedLight, sectionMask, true));
+            GUI_INTERIOR_MESHES[sectionMask] = mesh;
+        }
+        mesh.draw(renderType, poseStack);
+    }
+
     static void clearMeshes() {
         for (int index = 0; index < MESHES.length; index++) {
             if (MESHES[index] != null) {
                 MESHES[index].close();
                 MESHES[index] = null;
+            }
+            if (GUI_INTERIOR_MESHES[index] != null) {
+                GUI_INTERIOR_MESHES[index].close();
+                GUI_INTERIOR_MESHES[index] = null;
             }
         }
     }
@@ -69,13 +92,43 @@ final class RingWorldGeoRenderer extends GeoObjectRenderer<RingWorldGeoRenderer.
             int packedLight,
             int brokenSections
     ) {
+        buildMesh(buffer, renderType, packedLight, brokenSections, false);
+    }
+
+    private static void buildMesh(
+            VertexConsumer buffer,
+            RenderType renderType,
+            int packedLight,
+            int brokenSections,
+            boolean guiInteriorOnly
+    ) {
         MultiBufferSource bufferSource = ignored -> buffer;
         INSTANCE.brokenSections = brokenSections;
+        INSTANCE.guiInteriorOnly = guiInteriorOnly;
         try {
             INSTANCE.render(new PoseStack(), ANIMATABLE, bufferSource, renderType, buffer, packedLight, 0.0F);
         } finally {
             INSTANCE.brokenSections = 0;
+            INSTANCE.guiInteriorOnly = false;
         }
+    }
+
+    @Override
+    public void createVerticesOfQuad(GeoQuad quad, Matrix4f poseState, Vector3f normal,
+                                     VertexConsumer buffer, int packedLight, int packedOverlay, int colour) {
+        if (guiInteriorOnly && guiSectionIndex >= 0) {
+            double minimumOutwardCoordinate = Double.POSITIVE_INFINITY;
+            for (var vertex : quad.vertices()) {
+                Vector4f position = poseState.transform(new Vector4f(vertex.position(), 1.0F));
+                minimumOutwardCoordinate = Math.min(minimumOutwardCoordinate,
+                        RingWorldRenderGeometry.guiOutwardCoordinate(guiSectionIndex,
+                                position.x(), position.z()));
+            }
+            if (!RingWorldRenderGeometry.guiInteriorFrameFace(minimumOutwardCoordinate)) {
+                return;
+            }
+        }
+        super.createVerticesOfQuad(quad, poseState, normal, buffer, packedLight, packedOverlay, colour);
     }
 
     @Override
@@ -122,19 +175,16 @@ final class RingWorldGeoRenderer extends GeoObjectRenderer<RingWorldGeoRenderer.
             // The authored damage tree sits beside the ring and is rendered only after explicit relocation.
             return;
         }
-        super.renderRecursively(
-                poseStack,
-                animatable,
-                bone,
-                renderType,
-                bufferSource,
-                buffer,
-                isReRender,
-                partialTick,
-                packedLight,
-                packedOverlay,
-                colour
-        );
+        int previousSectionIndex = guiSectionIndex;
+        if (sectionIndex >= 0) guiSectionIndex = sectionIndex;
+        try {
+            super.renderRecursively(
+                    poseStack, animatable, bone, renderType, bufferSource, buffer,
+                    isReRender, partialTick, packedLight, packedOverlay, colour
+            );
+        } finally {
+            guiSectionIndex = previousSectionIndex;
+        }
     }
 
     /** Maps baked section roots to generation order Section1/Section4/Section3/Section2. */

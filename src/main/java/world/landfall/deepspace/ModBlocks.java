@@ -34,7 +34,6 @@ import java.util.List;
 
 public class ModBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(Deepspace.MODID);
-    public static final DeferredBlock<Block> ANGEL_BLOCK = BLOCKS.register("angel_block", () -> new AngelBlock(BlockBehaviour.Properties.of()));
     public static final DeferredBlock<Block> OXYGENATOR_BLOCK = BLOCKS.register("oxygenator", OxygenatorBlock::new);
     public static final DeferredBlock<LiquidBlock> OXYGEN = BLOCKS.register("oxygen", () ->
             new LiquidBlock(ModFluids.OXYGEN.get(), BlockBehaviour.Properties.ofFullCopy(Blocks.WATER)
@@ -51,7 +50,7 @@ public class ModBlocks {
             .destroyTime(4)
             .isRedstoneConductor((state, getter, pos) -> true)
     ));
-    // Temporary iron-block presentation; the block only reacts to redstone on a Sable sub-level.
+    // Use iron-block strength with the authored model; redstone activation requires a Sable sub-level.
     public static final DeferredBlock<Block> HYPER_RELAY_ENGINE_BLOCK = BLOCKS.register(
             "hyper_relay_engine",
             () -> new HyperRelayEngineBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK))

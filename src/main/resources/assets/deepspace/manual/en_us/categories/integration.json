@@ -1,0 +1,10 @@
+{
+  "name": "Integration and Settings",
+  "description": "Optional systems and display options",
+  "icon": "settings",
+  "sortnum": 6,
+  "manual_entries": [
+    "mods",
+    "settings"
+  ]
+}

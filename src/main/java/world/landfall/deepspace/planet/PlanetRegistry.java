@@ -348,9 +348,10 @@ public class PlanetRegistry {
                     bounds.min(),
                     bounds.max(),
                     List.of(),
-                    "A four-times-scale End world represented as an airless gas giant",
-                    new Vec2(-1000, -1000),
-                    new Vec2(1000, 1000),
+                    "The vanilla End with a central island and distant outer islands",
+                    // Include the outer End islands beyond the vanilla empty ring.
+                    new Vec2(-4096, -4096),
+                    new Vec2(4096, 4096),
                     List.of(
                             Deepspace.path("textures/termina_down.png"),
                             Deepspace.path("textures/termina_north.png"),
@@ -961,6 +962,14 @@ public class PlanetRegistry {
         }
         PacketDistributor.sendToAllPlayers(PlanetSyncPacket.createPlanetUpdatePacket(planet));
         LOGGER.info("Synchronized generated texture update for planet {}", planetId);
+    }
+
+    /** Sends scan counters without forcing a render-thread texture rebuild. */
+    public static void syncPlanetProgressToAllPlayers(@NotNull String planetId) {
+        Planet planet = getPlanet(planetId);
+        if (planet != null) {
+            PacketDistributor.sendToAllPlayers(PlanetSyncPacket.createProgressUpdatePacket(planet));
+        }
     }
 } 
 

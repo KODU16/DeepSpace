@@ -8,8 +8,9 @@ final class SubLevelTransferReadiness {
     }
 
     static boolean canRestoreRiding(boolean expectedPresent, UUID expectedSubLevel, UUID trackedSubLevel) {
+        // A real destination hull and pose may arrive before Sable marks an unmounted pilot as tracking it.
         return expectedPresent
                 && expectedSubLevel != null
-                && expectedSubLevel.equals(trackedSubLevel);
+                && (trackedSubLevel == null || expectedSubLevel.equals(trackedSubLevel));
     }
 }

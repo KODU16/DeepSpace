@@ -22,6 +22,7 @@ public record SubLevelTransferProbeReplyPacket(
         double y,
         double z,
         boolean expectedSubLevelPresent,
+        boolean expectedPoseReady,
         UUID trackedSubLevelId,
         UUID vehicleId
 ) implements CustomPacketPayload {
@@ -39,6 +40,7 @@ public record SubLevelTransferProbeReplyPacket(
         buffer.writeDouble(packet.y);
         buffer.writeDouble(packet.z);
         buffer.writeBoolean(packet.expectedSubLevelPresent);
+        buffer.writeBoolean(packet.expectedPoseReady);
         buffer.writeNullable(packet.trackedSubLevelId, (target, value) -> target.writeUUID(value));
         buffer.writeNullable(packet.vehicleId, (target, value) -> target.writeUUID(value));
     }
@@ -51,6 +53,7 @@ public record SubLevelTransferProbeReplyPacket(
                 buffer.readDouble(),
                 buffer.readDouble(),
                 buffer.readDouble(),
+                buffer.readBoolean(),
                 buffer.readBoolean(),
                 buffer.readNullable(target -> target.readUUID()),
                 buffer.readNullable(target -> target.readUUID())
@@ -65,23 +68,28 @@ public record SubLevelTransferProbeReplyPacket(
             SubLevelEvents.markClientTransferReady(
                     packet.transferId,
                     player.getUUID(),
-                    packet.expectedSubLevelPresent,
-                    packet.trackedSubLevelId
-            );
-            LOGGER.info(
-                    "[DEEPSPACE-TRANSFER] id={} phase=CLIENT_OBSERVATION player={} tick={} dimension={} "
-                            + "position=({},{},{}) expectedSubLevelPresent={} trackedSubLevel={} vehicle={}",
-                    packet.transferId,
-                    player.getUUID(),
-                    packet.observationTick,
-                    packet.dimension,
-                    packet.x,
-                    packet.y,
-                    packet.z,
-                    packet.expectedSubLevelPresent,
+                    packet.expectedSubLevelPresent && packet.expectedPoseReady,
                     packet.trackedSubLevelId,
-                    packet.vehicleId
+                    packet.dimension, packet.x, packet.y, packet.z, packet.observationTick
             );
+            // Preserve periodic evidence without writing a log entry for every handshake packet.
+            if (packet.observationTick % 20 == 0) {
+                LOGGER.info(
+                        "[DEEPSPACE-TRANSFER] id={} phase=CLIENT_OBSERVATION player={} tick={} dimension={} "
+                                + "position=({},{},{}) expectedSubLevelPresent={} expectedPoseReady={} trackedSubLevel={} vehicle={}",
+                        packet.transferId,
+                        player.getUUID(),
+                        packet.observationTick,
+                        packet.dimension,
+                        packet.x,
+                        packet.y,
+                        packet.z,
+                        packet.expectedSubLevelPresent,
+                        packet.expectedPoseReady,
+                        packet.trackedSubLevelId,
+                        packet.vehicleId
+                );
+            }
         });
     }
 

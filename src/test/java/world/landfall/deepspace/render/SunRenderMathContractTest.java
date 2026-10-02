@@ -56,6 +56,32 @@ public final class SunRenderMathContractTest {
         if (blueStar != 0xFFFFB58F) {
             throw new AssertionError("Expected baked ABGR spectral tint, got 0x" + Integer.toHexString(blueStar));
         }
+        // The whole face emits light while keeping its spectral hue and source texture contrast.
+        int neutral = 0xFF707070;
+        int orange = 0xFFB247;
+        int edge = SunRenderMath.brightenSpectralFaceAbgr(neutral, orange, 0.0D, 0.0D);
+        int center = SunRenderMath.brightenSpectralFaceAbgr(neutral, orange, 0.5D, 0.5D);
+        assertTrue((edge & 0xFF) >= 210 && (edge >>> 16 & 0xFF) < 150,
+                "the face remains luminous without washing out its orange color");
+        assertTrue((center & 0xFF) > (center >>> 8 & 0xFF)
+                        && (center >>> 8 & 0xFF) > (center >>> 16 & 0xFF),
+                "bright G-class core retains a warm spectral tint");
+        assertTrue((center & 0xFF) > (edge & 0xFF)
+                        && (center >>> 8 & 0xFF) > (edge >>> 8 & 0xFF)
+                        && (center >>> 16 & 0xFF) > (edge >>> 16 & 0xFF),
+                "the face has a gentle center lift");
+        int blueCenter = SunRenderMath.brightenSpectralFaceAbgr(neutral, 0x8FB5FF, 0.5D, 0.5D);
+        assertTrue((blueCenter >>> 16 & 0xFF) > (blueCenter & 0xFF)
+                        && (blueCenter >>> 16 & 0xFF) > (center >>> 16 & 0xFF),
+                "blue and orange spectral classes remain visibly distinct");
+        int axis = SunRenderMath.brightenSpectralFaceAbgr(neutral, orange, 0.5D, 0.1D);
+        int diagonal = SunRenderMath.brightenSpectralFaceAbgr(neutral, orange, 0.1D, 0.1D);
+        assertTrue(axis == diagonal, "equal square radii must have equal brightness");
+        int darkSource = SunRenderMath.brightenSpectralFaceAbgr(0xFF202020, orange, 0.5D, 0.5D);
+        int lightSource = SunRenderMath.brightenSpectralFaceAbgr(0xFFE0E0E0, orange, 0.5D, 0.5D);
+        int redContrast = (lightSource & 0xFF) - (darkSource & 0xFF);
+        assertTrue(redContrast >= 8 && redContrast <= 25,
+                "source detail stays visible without dominating the broad center light");
     }
 
     private static void assertNear(float expected, float actual, String label) {

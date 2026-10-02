@@ -6,7 +6,19 @@ related gameplay logic.
 
 Original mod authors: Mallowwww and confect1ondev.
 
-Unofficial port maintenance: DeepSpace_versionK project maintainers.
+Current author and unofficial port maintainer: KODU16.
+
+## License
+
+This port remains licensed under MIT. [LICENSE](LICENSE) retains the original
+copyright notice for confect1on (2025) and the complete permission and warranty
+text. Built mod JARs include this unchanged license and [NOTICE.md](NOTICE.md),
+which preserves upstream distribution requests and space imagery attribution.
+
+## Crafting
+
+- DeepSpace Helmet: one iron helmet + one Heart of the Sea, shapeless.
+- DeepSpace Terminal: one Tide Armor Trim Smithing Template + one iron block, shapeless.
 
 This port is not an official release from, and is not supported by, the original
 authors.
@@ -28,6 +40,11 @@ native material-lighting coefficient. Other shader packs are left unchanged.
 
 Normal `build` and `check` tasks verify Sable, Sable Companion, and the matching
 Rapier runtime so a compile-only dependency cannot pass unnoticed.
+
+Photon is optional. Install Photon and its own dependencies to enable hyper-relay
+light effects. Without Photon, the relay model still renders normally and only
+the Photon effect is skipped. The engine indicators and enchantment particles
+remain available without Photon.
 
 ## Development
 

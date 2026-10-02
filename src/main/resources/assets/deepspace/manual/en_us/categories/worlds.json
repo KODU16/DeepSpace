@@ -1,0 +1,10 @@
+{
+  "name": "Planets and Habitats",
+  "description": "Surfaces, ring worlds, and ratings",
+  "icon": "planet",
+  "sortnum": 2,
+  "manual_entries": [
+    "paradise",
+    "rings"
+  ]
+}

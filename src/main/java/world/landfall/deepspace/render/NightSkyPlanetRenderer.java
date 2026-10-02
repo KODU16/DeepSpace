@@ -103,7 +103,23 @@ public final class NightSkyPlanetRenderer {
         }
         Planet planet = PlanetRegistry.getPlanetByDimension(level.dimension());
         return level.dimension().location().equals(OVERWORLD)
-                || (planet != null && level.dimension().location().getNamespace().equals("infinity"));
+                || shouldSuppressInfinityCelestialBodies()
+                // Dacha also uses an Overworld sky stem, so hide its fallback moon before registry synchronization.
+                || "deepspace".equals(level.dimension().location().getNamespace())
+                        && level.dimension().location().getPath().matches("dacha_[0-9]+_planet_[1-6]")
+                || (planet != null && !planet.isWormhole());
+    }
+
+    /** Infinity skies must never show fallback moons while the client waits for DeepSpace's planet registry. */
+    public static boolean shouldSuppressInfinityCelestialBodies() {
+        var level = Minecraft.getInstance().level;
+        return level != null && "infinity".equals(level.dimension().location().getNamespace());
+    }
+
+    private static boolean isGeneratedPlanetSurface(Planet planet) {
+        var dimension = planet.getDimension().location();
+        return "infinity".equals(dimension.getNamespace())
+                || "deepspace".equals(dimension.getNamespace()) && dimension.getPath().startsWith("dacha_");
     }
 
     private static RenderType skyPlanetRenderType(ResourceLocation texture, boolean irisEnabled) {
@@ -207,9 +223,11 @@ public final class NightSkyPlanetRenderer {
         Map<String, Planet> planetsById = new HashMap<>();
         List<NightSkyPlanetLayout.Candidate> candidates = new ArrayList<>();
         for (Planet candidate : PlanetRegistry.getAllPlanets()) {
-            if (candidate.isRingWorldEdge()
+            // Relays are routes, not moons; generated-world observers only see other generated worlds in this galaxy.
+            if (candidate.isWormhole() || candidate.isRingWorldEdge()
                     || candidate.getId().equals(observer.getId())
-                    || !candidate.getGalaxy().equals(observer.getGalaxy())) {
+                    || !candidate.getGalaxy().equals(observer.getGalaxy())
+                    || isGeneratedPlanetSurface(observer) && !isGeneratedPlanetSurface(candidate)) {
                 continue;
             }
             double distance = observer.getCenter().distanceTo(candidate.getCenter());

@@ -1,0 +1,15 @@
+{
+  "name": "Ring Worlds",
+  "category": "worlds",
+  "sortnum": 2,
+  "pages": [
+    {
+      "title": "Ring Worlds",
+      "text": "A ring world is a large structure surrounding a star. Each galaxy has a 1% chance of generating one."
+    },
+    {
+      "title": "Segments",
+      "text": "A ring world always contains four segments. Each segment has a 50% chance of being damaged and a 50% chance of containing a random world. Their textures distinguish the two states."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "模组联动",
+  "category": "integration",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "物理结构",
+      "text": "安装 Aeronautics:Interstellar Expansion 时，其控制椅可在驾驶信息界面中显示 DeepSpace 行星信息，与头盔作用相同。额外的，AeroIE控制椅自带Hyper Relay Engine，可以在中继器相同的范围内按下跃迁对应的按键进行跃迁。"
+    }
+  ]
+}

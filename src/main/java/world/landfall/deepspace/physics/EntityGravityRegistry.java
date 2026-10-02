@@ -1,5 +1,7 @@
 package world.landfall.deepspace.physics;
 
+import world.landfall.deepspace.planet.GalaxyDimensions;
+
 /**
  * Applies the fixed gravity rules for space and planetary dimensions.
  */
@@ -9,7 +11,8 @@ public final class EntityGravityRegistry {
 
     /** Space dimensions are weightless; every planet retains vanilla gravity. */
     public static boolean isZeroGravityDimension(String dimensionId) {
-        return dimensionId.equals("deepspace:space") || dimensionId.startsWith("deepspace:galaxy_");
+        // Share the same galaxy classification as terrain loading and Sable physics.
+        return GalaxyDimensions.isGalaxy(dimensionId);
     }
 
     /** Preserves native gravity outside space and removes it inside space. */

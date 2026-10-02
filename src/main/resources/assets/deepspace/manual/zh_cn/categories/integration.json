@@ -1,0 +1,10 @@
+{
+  "name": "联动与设置",
+  "description": "可选系统与显示选项",
+  "icon": "settings",
+  "sortnum": 6,
+  "manual_entries": [
+    "mods",
+    "settings"
+  ]
+}

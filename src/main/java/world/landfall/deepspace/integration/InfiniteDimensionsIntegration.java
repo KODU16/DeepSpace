@@ -41,6 +41,10 @@ import org.slf4j.Logger;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.Config;
 import world.landfall.deepspace.planet.Galaxy;
+import world.landfall.deepspace.planet.DachaGalaxyState;
+import world.landfall.deepspace.worldgen.DachaChunkGenerator;
+import net.minecraft.world.level.biome.FixedBiomeSource;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import world.landfall.deepspace.planet.ParadiseRating;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
@@ -111,6 +115,8 @@ public final class InfiniteDimensionsIntegration {
     private static final Set<Integer> GENERATED_INDICES = new HashSet<>();
     private static final Set<Integer> FORCED_RING_WORLD_INDICES = new HashSet<>();
     private static final Map<Integer, Integer> FORCED_RING_WORLD_BROKEN_COUNTS = new java.util.HashMap<>();
+    // Debug galaxy origins are loaded before graph keys are resolved so Dacha keeps its identity.
+    private static final Map<Integer, Integer> DACHA_ORIGINS = new java.util.HashMap<>();
     private static final Map<Class<?>, Boolean> GENERATED_BOSS_CLASSES = new java.util.HashMap<>();
     private static final Map<ResourceLocation, Boolean> GENERATED_BOSS_ENTITY_TYPES = new java.util.HashMap<>();
     private static Set<ResourceKey<Level>> pendingTextureLevels = Set.of();
@@ -128,7 +134,8 @@ public final class InfiniteDimensionsIntegration {
             }
             return;
         }
-        if (!Config.INFINITE_DIMENSIONS_WORMHOLES.get() && !originState.enabled()) {
+        if (!Config.INFINITE_DIMENSIONS_WORMHOLES.get() && !originState.enabled()
+                && DachaGalaxyState.resolve(event.getServer()).origins().isEmpty()) {
             return;
         }
         activeServer = event.getServer();
@@ -174,6 +181,7 @@ public final class InfiniteDimensionsIntegration {
             GENERATED_INDICES.clear();
             FORCED_RING_WORLD_INDICES.clear();
             FORCED_RING_WORLD_BROKEN_COUNTS.clear();
+            DACHA_ORIGINS.clear();
             GENERATED_BOSS_CLASSES.clear();
             GENERATED_BOSS_ENTITY_TYPES.clear();
             pendingTextureLevels = Set.of();
@@ -183,16 +191,21 @@ public final class InfiniteDimensionsIntegration {
     private static void tryInitialize(MinecraftServer server) {
         try {
             boolean graphEnabled = Config.INFINITE_DIMENSIONS_WORMHOLES.get();
+            DACHA_ORIGINS.clear();
+            DACHA_ORIGINS.putAll(DachaGalaxyState.resolve(server).origins());
             Set<Integer> storedIndices = graphEnabled
                     ? new HashSet<>(readGeneratedIndices(server))
                     : new HashSet<>();
             FORCED_RING_WORLD_INDICES.clear();
             FORCED_RING_WORLD_BROKEN_COUNTS.clear();
-            if (graphEnabled) {
+            if (graphEnabled || !DACHA_ORIGINS.isEmpty()) {
                 FORCED_RING_WORLD_INDICES.addAll(readIntegerSet(server, FORCED_RING_WORLDS_FILE));
                 FORCED_RING_WORLD_BROKEN_COUNTS.putAll(readIntegerMap(server, FORCED_RING_WORLD_DAMAGE_FILE));
             }
             storedIndices.addAll(FORCED_RING_WORLD_INDICES);
+            storedIndices.addAll(DACHA_ORIGINS.keySet());
+            // Restore the source vertices too, even if procedural graph exploration was disabled later.
+            DACHA_ORIGINS.values().stream().filter(index -> index >= 0).forEach(storedIndices::add);
             Set<ResourceKey<Level>> textureLevels = new HashSet<>();
             if (RingWorldOriginState.resolve(server).enabled()) {
                 textureLevels.addAll(initializePrimaryRingWorldOrigin(server));
@@ -216,6 +229,9 @@ public final class InfiniteDimensionsIntegration {
             }
             if (graphEnabled) {
                 registerPrimaryGraphWormholes(primary, server.overworld().getSeed());
+            }
+            for (Map.Entry<Integer, Integer> origin : DACHA_ORIGINS.entrySet()) {
+                connectDacha(server, origin.getKey(), origin.getValue());
             }
             refreshResolvedWormholes();
             if (graphEnabled) {
@@ -257,6 +273,8 @@ public final class InfiniteDimensionsIntegration {
             Integer forcedBrokenCount
     ) throws ReflectiveOperationException {
         long worldSeed = server.overworld().getSeed();
+        // Authored debug systems bypass random classification and retain all six prescribed worlds.
+        if (DACHA_ORIGINS.containsKey(chainIndex)) return generateDachaSystem(server, chainIndex);
         long chainSalt = mix64(chainIndex * 0x632BE59BD9B4E019L);
         Random random = new Random(mix64(worldSeed ^ 0x49A3E77D9B5C21A1L ^ chainSalt));
         // A separate stream keeps dimension salts independent from names and layout choices.
@@ -927,6 +945,103 @@ public final class InfiniteDimensionsIntegration {
         }
     }
 
+    /** Summons the authored six-world system and a persistent two-way relay in the current galaxy. */
+    public static Galaxy summonDacha(MinecraftServer server, ResourceKey<Level> currentDimension) {
+        if (server != activeServer || !initialized) throw new IllegalStateException("Infinite Dimensions bridge is not ready");
+        Galaxy source = PlanetRegistry.getGalaxyByDimension(currentDimension);
+        if (source == null) {
+            Planet surface = PlanetRegistry.getPlanetByDimension(currentDimension);
+            if (surface != null) source = PlanetRegistry.getGalaxyByDimension(surface.getGalaxy());
+        }
+        if (source == null || !CHAIN_INDICES.containsKey(source.dimension())) {
+            throw new IllegalStateException("Run this command in a registered DeepSpace galaxy or one of its planets");
+        }
+        int sourceIndex = CHAIN_INDICES.get(source.dimension());
+        Random random = new Random();
+        int index;
+        do {
+            index = random.nextInt(2_000_000);
+        } while (GENERATED_INDICES.contains(index) || DIMENSION_INDICES.containsValue(index));
+        DACHA_ORIGINS.put(index, sourceIndex);
+        // Reserve the authored identity before allocating worlds, so a partial failure can recover on restart.
+        DachaGalaxyState.resolve(server).add(index, sourceIndex);
+        try {
+            GeneratedSystem system = generateDachaSystem(server, index);
+            Set<ResourceKey<Level>> textureLevels = new HashSet<>(pendingTextureLevels);
+            registerSystem(server, system, textureLevels);
+            connectDacha(server, index, sourceIndex);
+            GENERATED_INDICES.add(index);
+            writeGeneratedIndices(server, GENERATED_INDICES);
+            pendingTextureLevels = Set.copyOf(textureLevels);
+            refreshResolvedWormholes();
+            PlanetRegistry.syncToAllPlayers();
+            return system.galaxy();
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Could not register Dacha dimensions", exception);
+        }
+    }
+
+    /** Terrain recipes, biome colors and atmosphere together meet the ordinary S-grade criteria. */
+    private static GeneratedSystem generateDachaSystem(MinecraftServer server, int index)
+            throws ReflectiveOperationException {
+        ResourceKey<Level> dimension = galaxyDimensionKey(server.overworld().getSeed(), index);
+        Vec3 center = new Vec3(0, 200, 0);
+        double radius = StarIdentity.BASE_STAR_RADIUS;
+        Sun star = new Sun(center.subtract(radius, radius, radius), center.add(radius, radius, radius),
+                radius, "Dacha", "G4", 0xFFF1BF);
+        Galaxy galaxy = new Galaxy("dacha_" + index, "Dacha", dimension, new Vec3(0, 200, 6200), star);
+        // Six green biomes supply distinct normal feature sets, including jungle trees and flower forests.
+        String[] biomes = {"plains", "forest", "birch_forest", "jungle", "flower_forest", "meadow"};
+        // Names describe the six continuous noise recipes, without the removed grid/canal masks.
+        String[] recipes = {"Rolling coastal plains", "Coastal terraces", "Irregular ridges", "Garden islands", "Coastal wetlands", "Coastal uplands"};
+        var biomeRegistry = server.registryAccess().registryOrThrow(Registries.BIOME);
+        var settings = server.registryAccess().registryOrThrow(Registries.NOISE_SETTINGS)
+                .getHolderOrThrow(NoiseGeneratorSettings.OVERWORLD);
+        Registry<LevelStem> stems = server.registryAccess().registryOrThrow(Registries.LEVEL_STEM);
+        LevelStem overworld = stems.getOrThrow(LevelStem.OVERWORLD);
+        Method addWorld = server.getClass().getMethod("infinity$addWorld", ResourceKey.class, LevelStem.class);
+        List<Planet> planets = new ArrayList<>();
+        for (int style = 0; style < 6; style++) {
+            ResourceKey<Level> surface = ResourceKey.create(Registries.DIMENSION,
+                    Deepspace.path("dacha_" + index + "_planet_" + (style + 1)));
+            if (server.getLevel(surface) == null) {
+                var biome = biomeRegistry.getHolderOrThrow(ResourceKey.create(Registries.BIOME,
+                        ResourceLocation.withDefaultNamespace(biomes[style])));
+                addWorld.invoke(server, surface, new LevelStem(overworld.type(),
+                        new DachaChunkGenerator(new FixedBiomeSource(biome), settings, style)));
+            }
+            Vec3 position = orbitPoint(center, 5000, style * Math.PI / 3);
+            Planet planet = new Planet(galaxy.id() + "_planet_" + (style + 1), "Dacha " + (style + 1), surface,
+                    position.subtract(100, 100, 100), position.add(100, 100, 100),
+                    List.of(new Planet.PlanetDecoration(Planet.PlanetDecoration.ATMOSPHERE, 1.1F, 0xFF78A7FF)),
+                    recipes[style], new Vec2(-1000, -1000), new Vec2(1000, 1000), List.of(), dimension, null)
+                    .withTextureGenerationDetail(Planet.TextureGenerationDetail.FEATURES);
+            // Before sampling, these facts describe the actual generator rather than overriding a grade.
+            planet.setParadiseProfile(new Planet.ParadiseProfile(true, false, true, true, true, true, true, true, true));
+            if (ParadiseRating.evaluate(planet).grade() != ParadiseRating.Grade.S) {
+                throw new IllegalStateException("Dacha habitat recipe does not meet S-grade criteria");
+            }
+            planets.add(planet);
+        }
+        return new GeneratedSystem(index, galaxy, planets, 6);
+    }
+
+    /** Restores the authored connection after both galaxies have been registered, using stable positions. */
+    private static void connectDacha(MinecraftServer server, int index, int sourceIndex) {
+        long seed = server.overworld().getSeed();
+        Galaxy source = PlanetRegistry.getGalaxyByDimension(sourceIndex == -1 ? PRIMARY_SPACE : galaxyDimensionKey(seed, sourceIndex));
+        Galaxy dacha = PlanetRegistry.getGalaxyByDimension(galaxyDimensionKey(seed, index));
+        if (source == null || dacha == null) throw new IllegalStateException("Dacha relay endpoint is unavailable");
+        Random random = new Random(mix64(seed ^ index * 0x632BE59BD9B4E019L));
+        Vec3 departure = orbitPoint(source.sun().getCenter(), outerRadius(source, source.dimension()) + 1600,
+                random.nextDouble() * Math.PI * 2);
+        Vec3 arrival = orbitPoint(dacha.sun().getCenter(), 6600, random.nextDouble() * Math.PI * 2);
+        PlanetRegistry.registerPlanet(createWormhole(source.id() + "_wormhole_dacha_" + index,
+                "Dacha Hyper Relay", source.dimension(), dacha.dimension(), departure, dacha.arrival()));
+        PlanetRegistry.registerPlanet(createWormhole(dacha.id() + "_wormhole_origin",
+                source.name() + " Hyper Relay", dacha.dimension(), source.dimension(), arrival, source.arrival()));
+    }
+
     /** Materializes one graph neighbor only when any wormhole leading to it is actually reached. */
     public static Planet resolveWormholeDestination(MinecraftServer server, Planet wormhole) {
         if (!initialized || !wormhole.isWormhole() || server != activeServer) {
@@ -934,6 +1049,13 @@ public final class InfiniteDimensionsIntegration {
         }
         Galaxy existingTarget = PlanetRegistry.getGalaxyByDimension(wormhole.getDimension());
         if (existingTarget != null) {
+            Integer targetIndex = CHAIN_INDICES.get(existingTarget.dimension());
+            Integer sourceIndex = CHAIN_INDICES.get(wormhole.getGalaxy());
+            // Repair the reverse endpoint for routes restored from older saves or density settings.
+            if (targetIndex != null && sourceIndex != null
+                    && ensureGraphWormhole(server, existingTarget, targetIndex, sourceIndex)) {
+                PlanetRegistry.syncToAllPlayers();
+            }
             return replaceWormholeMetadataIfNeeded(wormhole, existingTarget);
         }
         Integer sourceIndex = CHAIN_INDICES.get(wormhole.getGalaxy());
@@ -985,8 +1107,45 @@ public final class InfiniteDimensionsIntegration {
                 textureLevels.add(planet.getDimension());
             }
         });
+        // Ring systems and ordinary systems must expose the same reciprocal galaxy graph.
+        for (int neighbor : InfiniteGalaxyLayout.wormholeGraphNeighbors(
+                system.chainIndex, server.overworld().getSeed(), Config.INFINITE_WORMHOLE_DENSITY.get())) {
+            ensureGraphWormhole(server, system.galaxy, system.chainIndex, neighbor);
+        }
         // Dynamic dimensions are created after login, so publish Simulated's empty-or-persisted lock state now.
         server.getPlayerList().getPlayers().forEach(PhysicsStaffServerHandler::sendAllData);
+    }
+
+    /** Adds a missing endpoint without moving any existing relay or regenerating planetary terrain. */
+    private static boolean ensureGraphWormhole(
+            MinecraftServer server, Galaxy source, int sourceIndex, int targetIndex
+    ) {
+        long seed = server.overworld().getSeed();
+        ResourceKey<Level> targetDimension = targetIndex == -1
+                ? PRIMARY_SPACE : galaxyDimensionKey(seed, targetIndex);
+        if (PlanetRegistry.getPairedWormhole(source.dimension(), targetDimension) != null) {
+            return false;
+        }
+        DIMENSION_INDICES.put(targetDimension, targetIndex);
+        Galaxy target = PlanetRegistry.getGalaxyByDimension(targetDimension);
+        Random random = new Random(mix64(seed ^ sourceIndex * 0xD1B54A32D192ED03L
+                ^ targetIndex * 0x94D049BB133111EBL));
+        double radius = InfiniteGalaxyLayout.wormholeOrbitRadius(
+                outerRadius(source, source.dimension()), 1_200.0 + random.nextDouble() * 1_200.0, WORMHOLE_SIZE);
+        // Explicit ring-world routes may span non-neighboring graph nodes, so derive their bearing directly.
+        var sourcePoint = InfiniteGalaxyLayout.wormholeGraphPosition(sourceIndex, seed);
+        var targetPoint = InfiniteGalaxyLayout.wormholeGraphPosition(targetIndex, seed);
+        double bearing = Math.atan2(targetPoint.y() - sourcePoint.y(), targetPoint.x() - sourcePoint.x());
+        PlanetRegistry.registerPlanet(createWormhole(
+                source.id() + "_wormhole_" + graphIndexSlug(targetIndex),
+                (target == null ? nextGalaxyName(seed, targetIndex) : target.name()) + " Hyper Relay",
+                source.dimension(), targetDimension,
+                orbitPoint(source.sun().getCenter(), radius, bearing),
+                target == null ? Vec3.ZERO : target.arrival()
+        ));
+        LOGGER.info("[DEEPSPACE-JUMP] phase=GRAPH_RELAY_REPAIRED source={} destination={}",
+                source.dimension().location(), targetDimension.location());
+        return true;
     }
 
     /** Adds every configured graph edge incident to the primary galaxy. */
@@ -1096,6 +1255,7 @@ public final class InfiniteDimensionsIntegration {
     }
 
     private static String nextGalaxyName(long worldSeed, int chainIndex) {
+        if (DACHA_ORIGINS.containsKey(chainIndex)) return "Dacha";
         long chainSalt = mix64(chainIndex * 0x632BE59BD9B4E019L);
         Random random = new Random(mix64(worldSeed ^ 0x49A3E77D9B5C21A1L ^ chainSalt));
         // Match generateSystem's classification roll before deriving the dimension-bearing name.

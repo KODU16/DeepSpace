@@ -1,0 +1,15 @@
+{
+  "name": "DeepSpace Terminal",
+  "category": "start",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Opening the Map",
+      "text": "Craft one Tide Armor Trim Smithing Template and one iron block shapelessly to obtain one DeepSpace Terminal. Use the DeepSpace Terminal to open the persistent galaxy map. Drag to pan and scroll to zoom; click an explored galaxy to view its star system."
+    },
+    {
+      "title": "Reading the Manual",
+      "text": "The book icon in the bottom-right corner of either terminal screen opens this manual. Returning takes you back to the screen you were using."
+    }
+  ]
+}

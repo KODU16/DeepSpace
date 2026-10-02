@@ -1,0 +1,11 @@
+{
+  "name": "Mod Integration",
+  "category": "integration",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "Physical Structures",
+      "text": "With Aeronautics: Interstellar Expansion installed, its control seats display DeepSpace planet information in the piloting HUD, just like the helmet. AeroIE control seats also include a built-in Hyper Relay Engine. Press the assigned jump key within the same relay range to jump."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "DeepSpace Overview",
+  "category": "start",
+  "sortnum": 0,
+  "pages": [
+    {
+      "title": "What Is DeepSpace?",
+      "text": "DeepSpace aims to create an infinitely generated universe worth exploring. With the capabilities of Infinite Dimensions, every save can generate an unlimited number of galaxies, each unique and entirely random."
+    },
+    {
+      "title": "Entering Space",
+      "text": "Reach Y=550 on any planet, including the Overworld, to enter space. If you are riding a Sable sub-level, it will enter space with you."
+    }
+  ]
+}

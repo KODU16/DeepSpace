@@ -6,6 +6,9 @@
   "refmap": "deepspace.mixins.refmap.json",
   "mixins": [
     "MixinEntityGravity",
+    "MixinSableDimensionGravity",
+    "MixinFishingHookGravity",
+    "MixinBoatGravity",
     "MixinAirCurrent",
     "MixinGalaxyChunkMap",
     "MixinGameRenderer",
@@ -27,8 +30,10 @@
     "MixinLevelRendererClouds",
     "MixinMinecraftTransitionScreen",
     "MixinPhysicsStaffClientHandler",
+    "MixinSableTransferSnapshots",
     "MixinXaeroMapProcessor",
-    "MixinVsieControlSeatHud"
+    "MixinVsieControlSeatHud",
+    "MixinVsieHelmetHudToggle"
   ],
   "injectors": {
     "defaultRequire": 1

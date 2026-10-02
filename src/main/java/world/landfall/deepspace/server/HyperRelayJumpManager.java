@@ -14,6 +14,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
@@ -45,9 +46,6 @@ public final class HyperRelayJumpManager {
     /** Maximum distance, in blocks, between the sub-level bounding box and a relay before K/redstone is ignored. */
     public static final double ACTIVATION_DISTANCE = 200.0D;
     public static final int JUMP_DELAY_TICKS = 5 * 20;
-    // Dynamic dimensions may need another server tick to appear; retry slowly to avoid regenerating work every tick.
-    private static final int START_RETRY_DELAY_TICKS = 20;
-    private static final int START_RETRY_ATTEMPTS = 10;
 
     private static final Map<UUID, PendingJump> PENDING_JUMPS = new HashMap<>();
     private static final Map<UUID, PendingStart> PENDING_STARTS = new HashMap<>();
@@ -59,7 +57,7 @@ public final class HyperRelayJumpManager {
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         long now = server.overworld().getGameTime();
-        processPendingStarts(server, now);
+        processPendingStarts(server);
         Iterator<Map.Entry<UUID, PendingJump>> iterator = PENDING_JUMPS.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<UUID, PendingJump> entry = iterator.next();
@@ -76,16 +74,26 @@ public final class HyperRelayJumpManager {
             }
             iterator.remove();
             PendingJumpPlan plan = pending.plan();
-            SubLevelEvents.PreparedJump prepared = SubLevelEvents.prepareJump(
+            // Resolve the live craft pose and landing geometry at execution, as planetary transfers do.
+            SubLevel trigger = plan.trigger();
+            boolean sourceReady = plan.sourceContainer().getSubLevel(trigger.getUniqueId()) == trigger;
+            SubLevelEvents.HyperRelayJumpPlan current = sourceReady
+                    ? SubLevelEvents.planWormholeJump(server, plan.relay(), trigger,
+                            plan.sourceContainer().getLevel().dimension())
+                    : null;
+            boolean sameStructure = current != null
+                    && current.connected().stream().map(SubLevel::getUniqueId).collect(java.util.stream.Collectors.toSet())
+                    .equals(plan.connected().stream().map(SubLevel::getUniqueId)
+                            .collect(java.util.stream.Collectors.toSet()));
+            boolean executed = sameStructure && SubLevelEvents.WarpSubLevels(
                     plan.connected(),
                     plan.sourceContainer(),
-                    plan.destinationContainer(),
-                    plan.center(),
-                    plan.destination(),
+                    current.destinationContainer(),
+                    current.center(),
+                    current.destination(),
                     now,
                     SubLevelEvents.TransferMotionPolicy.STOP_AT_DESTINATION
             );
-            boolean executed = prepared != null && SubLevelEvents.executeJump(prepared);
             if (!executed) {
                 SubLevelEvents.releaseTransfer(plan.connected());
             }
@@ -95,33 +103,22 @@ public final class HyperRelayJumpManager {
         }
     }
 
-    private static void processPendingStarts(MinecraftServer server, long now) {
+    private static void processPendingStarts(MinecraftServer server) {
         Iterator<Map.Entry<UUID, PendingStart>> iterator = PENDING_STARTS.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<UUID, PendingStart> entry = iterator.next();
             PendingStart pending = entry.getValue();
-            if (pending.nextAttemptTick() > now) {
-                continue;
-            }
-
             ServerLevel galaxyLevel = server.getLevel(pending.galaxy());
-            StartResult result = galaxyLevel == null
+            ServerSubLevelContainer source = galaxyLevel == null ? null : ServerSubLevelContainer.getContainer(galaxyLevel);
+            // Readiness drives preparation; a removed or transferred source cancels the accepted request.
+            StartResult result = source == null
+                    || source.getSubLevel(pending.subLevel().getUniqueId()) != pending.subLevel()
                     ? StartResult.REJECTED
-                    : tryStartJump(server, galaxyLevel, pending.subLevel(), false);
-            if (result == StartResult.STARTED || result == StartResult.REJECTED || pending.attemptsRemaining() <= 1) {
-                if (result == StartResult.RETRY_LATER) {
-                    LOGGER.info("[DEEPSPACE-JUMP] phase=REJECTED reason=start_retry_timeout subLevel={}", entry.getKey());
-                }
+                    : tryStartJump(server, galaxyLevel, pending.subLevel(), pending.relay());
+            if (result != StartResult.RETRY_LATER) {
                 iterator.remove();
-                continue;
+                notifyPilots(server, pending.subLevel());
             }
-
-            entry.setValue(new PendingStart(
-                    pending.galaxy(),
-                    pending.subLevel(),
-                    pending.attemptsRemaining() - 1,
-                    now + START_RETRY_DELAY_TICKS
-            ));
         }
     }
 
@@ -142,10 +139,30 @@ public final class HyperRelayJumpManager {
         if (PlanetRegistry.getGalaxyByDimension(galaxy) == null) {
             return;
         }
-        double nearest = nearestRelayDistance(galaxy, subLevel);
+        sendStatus(player, subLevel);
+    }
+
+    /** Sends server-confirmed preparation and countdown state immediately to the pilot. */
+    public static void sendStatus(ServerPlayer player, SubLevel subLevel) {
+        double nearest = nearestRelayDistance(player.serverLevel().dimension(), subLevel);
         boolean inRange = nearest < ACTIVATION_DISTANCE;
         int countdown = countdownFor(subLevel);
         PacketDistributor.sendToPlayer(player, new HyperRelayJumpStatusPacket(inRange, nearest, countdown));
+    }
+
+    private static void notifyPilots(MinecraftServer server, SubLevel subLevel) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (SubLevelEvents.findTrackedSubLevelInRidingGraph(player) == subLevel) {
+                sendStatus(player, subLevel);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        // A subsequent world must not inherit an unresolved request from this server.
+        PENDING_STARTS.clear();
+        PENDING_JUMPS.clear();
     }
 
     private static int countdownFor(SubLevel subLevel) {
@@ -160,28 +177,31 @@ public final class HyperRelayJumpManager {
                 return (int) Math.max(0, pending.executeAtTick() - now);
             }
         }
-        return 0;
+        return PENDING_STARTS.containsKey(targetId) ? -1 : 0;
     }
 
     /** Attempts to schedule a jump for the sub-level containing {@code blockPos} in the given galaxy level. */
     public static boolean tryStartJump(MinecraftServer server, ServerLevel galaxyLevel, SubLevel subLevel) {
         UUID subLevelId = subLevel.getUniqueId();
-        if (PENDING_STARTS.containsKey(subLevelId)) {
-            LOGGER.info("[DEEPSPACE-JUMP] phase=REJECTED reason=start_already_pending subLevel={}", subLevelId);
+        if (PENDING_STARTS.containsKey(subLevelId) || isJumpScheduled(subLevel)) {
+            // Duplicate button presses acknowledge the active request instead of starting another route.
+            notifyPilots(server, subLevel);
             return false;
         }
 
-        StartResult result = tryStartJump(server, galaxyLevel, subLevel, true);
-        if (result == StartResult.RETRY_LATER) {
-            long gameTick = server.overworld().getGameTime();
-            PENDING_STARTS.put(subLevelId, new PendingStart(
-                    galaxyLevel.dimension(),
-                    subLevel,
-                    START_RETRY_ATTEMPTS,
-                    gameTick + START_RETRY_DELAY_TICKS
-            ));
-            LOGGER.info("[DEEPSPACE-JUMP] phase=PENDING_START subLevel={} dimension={}", subLevelId, galaxyLevel.dimension().location());
+        Planet relay = findNearestRelayInRange(galaxyLevel.dimension(), subLevel);
+        if (relay != null && PlanetRegistry.getGalaxyByDimension(galaxyLevel.dimension()) != null) {
+            // Acknowledge the route before lazy world generation; the client shows preparation immediately.
+            PENDING_STARTS.put(subLevelId, new PendingStart(galaxyLevel.dimension(), subLevel, relay));
+            notifyPilots(server, subLevel);
         }
+        StartResult result = tryStartJump(server, galaxyLevel, subLevel, relay);
+        if (result == StartResult.RETRY_LATER) {
+            LOGGER.info("[DEEPSPACE-JUMP] phase=PENDING_START subLevel={} dimension={}", subLevelId, galaxyLevel.dimension().location());
+        } else {
+            PENDING_STARTS.remove(subLevelId);
+        }
+        notifyPilots(server, subLevel);
         return result == StartResult.STARTED;
     }
 
@@ -189,7 +209,7 @@ public final class HyperRelayJumpManager {
             MinecraftServer server,
             ServerLevel galaxyLevel,
             SubLevel subLevel,
-            boolean allowRetry
+            @Nullable Planet relay
     ) {
         ResourceKey<Level> galaxy = galaxyLevel.dimension();
         if (PlanetRegistry.getGalaxyByDimension(galaxy) == null) {
@@ -200,8 +220,8 @@ public final class HyperRelayJumpManager {
             LOGGER.info("[DEEPSPACE-JUMP] phase=REJECTED reason=jump_already_scheduled subLevel={}", subLevel.getUniqueId());
             return StartResult.REJECTED;
         }
-        Planet relay = findNearestRelayInRange(galaxy, subLevel);
-        if (relay == null) {
+        if (relay == null || !relay.getGalaxy().equals(galaxy)
+                || distanceToRelay(subLevel, relay) >= ACTIVATION_DISTANCE) {
             LOGGER.info("[DEEPSPACE-JUMP] phase=REJECTED reason=no_relay_in_range dimension={} distance={}",
                     galaxy.location(), nearestRelayDistance(galaxy, subLevel));
             return StartResult.REJECTED;
@@ -209,8 +229,9 @@ public final class HyperRelayJumpManager {
         long gameTick = server.overworld().getGameTime();
         SubLevelEvents.HyperRelayJumpPlan plan = SubLevelEvents.planWormholeJump(server, relay, subLevel, galaxy);
         if (plan == null) {
-            LOGGER.info("[DEEPSPACE-JUMP] phase={} reason=plan_pending relay={}",
-                    allowRetry ? "DEFERRED" : "RETRY_WAIT", relay.getId());
+            if (!PENDING_STARTS.containsKey(subLevel.getUniqueId())) {
+                LOGGER.info("[DEEPSPACE-JUMP] phase=DEFERRED reason=plan_pending relay={}", relay.getId());
+            }
             return StartResult.RETRY_LATER;
         }
         ServerSubLevelContainer sourceContainer = ServerSubLevelContainer.getContainer(galaxyLevel);
@@ -225,11 +246,11 @@ public final class HyperRelayJumpManager {
         }
         UUID jumpId = UUID.randomUUID();
         PendingJumpPlan pendingPlan = new PendingJumpPlan(
+                subLevel,
                 connected,
                 sourceContainer,
                 plan.destinationContainer(),
-                plan.center(),
-                plan.destination()
+                relay
         );
         PENDING_JUMPS.put(jumpId, new PendingJump(pendingPlan, gameTick + JUMP_DELAY_TICKS));
         ResourceKey<Level> destinationGalaxy = pendingPlan.destinationContainer().getLevel().dimension();
@@ -249,6 +270,15 @@ public final class HyperRelayJumpManager {
                 distanceToRelay(subLevel, relay)
         );
         return StartResult.STARTED;
+    }
+
+    /** Covers lazy destination preparation and the countdown for every connected ship member. */
+    public static boolean isPreparingJump(SubLevel subLevel) {
+        if (isJumpScheduled(subLevel)) return true;
+        UUID targetId = subLevel.getUniqueId();
+        return PENDING_STARTS.values().stream().anyMatch(pending ->
+                SubLevelHelper.getConnectedChain(pending.subLevel()).stream()
+                        .anyMatch(member -> member.getUniqueId().equals(targetId)));
     }
 
     private static boolean isJumpScheduled(SubLevel subLevel) {
@@ -297,17 +327,10 @@ public final class HyperRelayJumpManager {
     }
 
     static AABB subLevelBounds(SubLevel subLevel) {
-        Vector3d center = subLevel.logicalPose().position();
-        double width = subLevel.boundingBox().width();
-        double height = subLevel.boundingBox().height();
-        double length = subLevel.boundingBox().length();
-        double halfWidth = width * 0.5;
-        double halfHeight = height * 0.5;
-        double halfLength = length * 0.5;
-        return new AABB(
-                center.x - halfWidth, center.y - halfHeight, center.z - halfLength,
-                center.x + halfWidth, center.y + halfHeight, center.z + halfLength
-        );
+        // The true world bounds include hull rotation and any offset between geometry and center of mass.
+        var bounds = subLevel.boundingBox();
+        return new AABB(bounds.minX(), bounds.minY(), bounds.minZ(),
+                bounds.maxX(), bounds.maxY(), bounds.maxZ());
     }
 
     static double distanceBetweenBounds(AABB first, AABB second) {
@@ -342,11 +365,11 @@ public final class HyperRelayJumpManager {
 
     /** Defers snapshot capture until the exact execution tick. */
     private record PendingJumpPlan(
+            SubLevel trigger,
             Collection<SubLevel> connected,
             ServerSubLevelContainer sourceContainer,
             ServerSubLevelContainer destinationContainer,
-            Vector3d center,
-            Vector3d destination
+            Planet relay
     ) {}
 
     private enum StartResult {
@@ -358,8 +381,7 @@ public final class HyperRelayJumpManager {
     private record PendingStart(
             ResourceKey<Level> galaxy,
             SubLevel subLevel,
-            int attemptsRemaining,
-            long nextAttemptTick
+            Planet relay
     ) {}
 }
 

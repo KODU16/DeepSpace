@@ -71,6 +71,7 @@ public class PlanetRenderer {
         return new RenderStateShard.ShaderStateShard(() -> {
             ShaderProgram shader = VeilRenderSystem.setShader(shaderLocation);
             shader.setTexture("Sampler0", texture);
+            GalaxyLogDepth.applyGeometryScale(shader);
             return VeilRenderBridge.toShaderInstance(shader);
         });
     }
@@ -82,6 +83,8 @@ public class PlanetRenderer {
                 .setCullState(RenderStateShard.CULL)
                 .setDepthTestState(GalaxyLogDepth.GREATER_DEPTH_TEST)
                 .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
+                // Keep native and Iris fallback planets in the shared celestial depth target.
+                .setOutputState(IrisIntegration.IRIS_TARGET)
                 .createCompositeState(true);
         return RenderType.create(
                 planetRenderTypeName("shaded", planetId, faceIndex),
@@ -98,6 +101,8 @@ public class PlanetRenderer {
                 .setCullState(RenderStateShard.CULL)
                 .setDepthTestState(GalaxyLogDepth.GREATER_DEPTH_TEST)
                 .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
+                // Keep native and Iris fallback planets in the shared celestial depth target.
+                .setOutputState(IrisIntegration.IRIS_TARGET)
                 .createCompositeState(true);
         return RenderType.create(
                 planetRenderTypeName("unshaded", planetId, faceIndex),
@@ -473,11 +478,16 @@ public class PlanetRenderer {
         var poseStack = new com.mojang.blaze3d.vertex.PoseStack();
         poseStack.mulPose(new Matrix4f(frustumMatrix));
         poseStack.pushPose();
-        for (Planet planet : PlanetRegistry.getPlanetsForGalaxy(instance.level.dimension())) {
+        var galaxyPlanets = PlanetRegistry.getPlanetsForGalaxy(instance.level.dimension());
+        java.util.Set<String> activeRelayIds = new java.util.HashSet<>();
+        for (Planet planet : galaxyPlanets) {
             if (planet.isHyperRelay()) {
-                HyperRelayGeoRenderer.draw(poseStack, planet, camera.getPosition(), projectionMatrix);
+                if (HyperRelayGeoRenderer.draw(poseStack, planet, camera.getPosition(), projectionMatrix)) {
+                    activeRelayIds.add(planet.getId());
+                }
             }
         }
+        HyperRelayGeoRenderer.updateGalaxyEffects(activeRelayIds);
         // Far-to-near submission remains correct if an Iris program temporarily misses its depth write.
         List<Planet> renderedPlanets = PlanetRegistry.getPlanetsForGalaxy(instance.level.dimension()).stream()
                 .filter(planet -> MESHES.containsKey(planet.getId()))

@@ -1,0 +1,11 @@
+{
+  "name": "Maps and Discovery",
+  "description": "Get to know galaxies and planets",
+  "icon": "map",
+  "sortnum": 1,
+  "manual_entries": [
+    "star_map",
+    "galaxy_view",
+    "scanning"
+  ]
+}

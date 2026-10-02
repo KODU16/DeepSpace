@@ -15,7 +15,7 @@ import world.landfall.deepspace.planet.ParadiseRating;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
 
-/** Adds sparse mature star-bramble clusters only on natural Infinite S-grade planets. */
+/** Applies the same sparse star-bramble generation to eligible Infinite and Dacha S-grade planets. */
 @EventBusSubscriber(modid = Deepspace.MODID)
 public final class StarBrambleGeneration {
     private StarBrambleGeneration() {

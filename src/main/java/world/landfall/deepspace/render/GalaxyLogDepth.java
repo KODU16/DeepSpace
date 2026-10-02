@@ -19,7 +19,9 @@ public final class GalaxyLogDepth {
     public static final RenderStateShard.DepthTestStateShard GREATER_DEPTH_TEST =
             new RenderStateShard.DepthTestStateShard("deepspace_log_depth_greater", GL11.GL_GREATER);
     private static final ResourceLocation ENTITY_CUTOUT_SHADER = Deepspace.path("galaxy_entity_cutout");
+    private static final ResourceLocation SOLAR_ENTITY_CUTOUT_SHADER = Deepspace.path("galaxy_solar_entity_cutout");
     private static boolean active;
+    private static float geometryScale = 1.0F;
 
     private GalaxyLogDepth() {
     }
@@ -63,11 +65,34 @@ public final class GalaxyLogDepth {
         }
     }
 
+    /** Tracks camera compression only; model size is not part of this factor. */
+    static float setGeometryScale(float scale) {
+        float previous = geometryScale;
+        geometryScale = scale;
+        return previous;
+    }
+
+    /** Restores physical clip W without changing projected size or logarithmic depth. */
+    static void applyGeometryScale(ShaderProgram shader) {
+        shader.getUniform("GeometryDepthScale").setFloat(geometryScale);
+    }
+
     /** Always writes the local logarithmic depth so Iris and native galaxy geometry remain comparable. */
     public static RenderStateShard.ShaderStateShard entityCutoutShader(ResourceLocation texture) {
         return new RenderStateShard.ShaderStateShard(() -> {
             ShaderProgram shader = VeilRenderSystem.setShader(ENTITY_CUTOUT_SHADER);
             shader.setTexture("Sampler0", texture);
+            applyGeometryScale(shader);
+            return VeilRenderBridge.toShaderInstance(shader);
+        });
+    }
+
+    /** Uses the same log-depth cutout pass while exposing a local solar direction to Gecko models. */
+    public static RenderStateShard.ShaderStateShard solarEntityCutoutShader(ResourceLocation texture) {
+        return new RenderStateShard.ShaderStateShard(() -> {
+            ShaderProgram shader = VeilRenderSystem.setShader(SOLAR_ENTITY_CUTOUT_SHADER);
+            shader.setTexture("Sampler0", texture);
+            applyGeometryScale(shader);
             return VeilRenderBridge.toShaderInstance(shader);
         });
     }

@@ -9,6 +9,9 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
 import com.mojang.math.Axis;
 import foundry.veil.api.client.render.MatrixStack;
+import foundry.veil.api.client.render.VeilRenderBridge;
+import foundry.veil.api.client.render.VeilRenderSystem;
+import foundry.veil.api.client.render.shader.program.ShaderProgram;
 import foundry.veil.api.event.VeilRenderLevelStageEvent;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -111,8 +114,11 @@ public final class RingWorldRenderer {
     private static final float MAX_SURFACE_TILE_SIZE_BLOCKS = 32.0F;
     // Full block and sky light keep the generated surface readable; vertex tint adds star-facing shading.
     private static final int RING_SURFACE_LIGHT = LightTexture.pack(15, 15);
+    // Dim the galaxy frame and generated terrain together: 85% brightness reduced by another 30%.
+    private static final float GALAXY_RING_BRIGHTNESS = 0.595F;
 
     private static final Map<String, ResourceLocation> SURFACE_TEXTURES = new HashMap<>();
+    private static final java.util.Set<String> DIRTY_SURFACE_TEXTURES = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final Map<ResourceLocation, RenderType> SURFACE_RENDER_TYPES = new HashMap<>();
     private static final Map<ResourceLocation, RenderType> SKY_SURFACE_RENDER_TYPES = new HashMap<>();
     private static final Map<ResourceLocation, RenderType> SKY_FALLBACK_SURFACE_RENDER_TYPES = new HashMap<>();
@@ -127,10 +133,12 @@ public final class RingWorldRenderer {
     );
     // Damage frames follow the intact ring's depth policy so their dense cubes keep the same precision.
     private static final RenderType IRREPARABLE_RING_COLOR_RENDER_TYPE = galaxyRingColorRenderType(
-            "deepspace_irreparable_ring_world_color", IRREPARABLE_RING_TEXTURE
+            "deepspace_irreparable_ring_world_color", IRREPARABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType REPAIRABLE_RING_COLOR_RENDER_TYPE = galaxyRingColorRenderType(
-            "deepspace_repairable_ring_world_color", REPAIRABLE_RING_TEXTURE
+            "deepspace_repairable_ring_world_color", REPAIRABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType IRREPARABLE_GUI_RING_COLOR_RENDER_TYPE = guiCutoutType(
             "deepspace_irreparable_gui_ring_world_color", IRREPARABLE_RING_TEXTURE, VertexFormat.Mode.QUADS,
@@ -145,22 +153,26 @@ public final class RingWorldRenderer {
     );
     private static final RenderType SKY_IRREPARABLE_RING_COLOR_RENDER_TYPE = ringColorRenderType(
             "deepspace_irreparable_ring_world_sky_color",
-            IRREPARABLE_RING_TEXTURE
+            IRREPARABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType SKY_REPAIRABLE_RING_COLOR_RENDER_TYPE = ringColorRenderType(
             "deepspace_repairable_ring_world_sky_color",
-            REPAIRABLE_RING_TEXTURE
+            REPAIRABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType SKY_FALLBACK_RING_COLOR_RENDER_TYPE = ringColorRenderType(
             "deepspace_ring_world_sky_fallback", RING_TEXTURE
     );
     private static final RenderType SKY_FALLBACK_IRREPARABLE_RING_COLOR_RENDER_TYPE = ringColorRenderType(
             "deepspace_irreparable_ring_world_sky_fallback",
-            IRREPARABLE_RING_TEXTURE
+            IRREPARABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType SKY_FALLBACK_REPAIRABLE_RING_COLOR_RENDER_TYPE = ringColorRenderType(
             "deepspace_repairable_ring_world_sky_fallback",
-            REPAIRABLE_RING_TEXTURE
+            REPAIRABLE_RING_TEXTURE,
+            GalaxyLogDepth.GREATER_DEPTH_TEST
     );
     private static final RenderType GUI_RING_COLOR_RENDER_TYPE = guiCutoutType(
             "deepspace_gui_ring_world_color", RING_TEXTURE, VertexFormat.Mode.QUADS,
@@ -170,9 +182,17 @@ public final class RingWorldRenderer {
     }
 
     private static RenderType ringColorRenderType(String name, ResourceLocation texture) {
+        return ringColorRenderType(name, texture, GalaxyLogDepth.GEQUAL_DEPTH_TEST);
+    }
+
+    /** Every surface-sky frame writes the same reversed logarithmic depth as its terrain. */
+    private static RenderType ringColorRenderType(
+            String name,
+            ResourceLocation texture,
+            RenderStateShard.DepthTestStateShard depthTest
+    ) {
         var state = RenderType.CompositeState.builder()
-                // Surface-sky bones remain in vanilla depth space; LEQUAL preserves coplanar Gecko quads.
-                .setShaderState(RenderStateShard.RENDERTYPE_ENTITY_CUTOUT_SHADER)
+                .setShaderState(GalaxyLogDepth.entityCutoutShader(texture))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, true))
                 .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
                 .setCullState(RingWorldRenderGeometry.cullFrameFaces()
@@ -180,7 +200,7 @@ public final class RingWorldRenderer {
                         : RenderStateShard.NO_CULL)
                 .setLightmapState(RenderStateShard.LIGHTMAP)
                 .setOverlayState(RenderStateShard.OVERLAY)
-                .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
+                .setDepthTestState(depthTest)
                 .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
                 // Share Iris' active colour/depth target with the star so physical occlusion survives shader packs.
                 .setOutputState(IrisIntegration.IRIS_TARGET)
@@ -198,6 +218,15 @@ public final class RingWorldRenderer {
 
     /** Galaxy frames use the same reversed logarithmic depth as their surface slabs. */
     private static RenderType galaxyRingColorRenderType(String name, ResourceLocation texture) {
+        return galaxyRingColorRenderType(name, texture, GalaxyLogDepth.GEQUAL_DEPTH_TEST);
+    }
+
+    /** Lets broken replacement sections win only when their quantized depth is strictly nearer. */
+    private static RenderType galaxyRingColorRenderType(
+            String name,
+            ResourceLocation texture,
+            RenderStateShard.DepthTestStateShard depthTest
+    ) {
         var state = RenderType.CompositeState.builder()
                 .setShaderState(GalaxyLogDepth.entityCutoutShader(texture))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, true))
@@ -207,7 +236,7 @@ public final class RingWorldRenderer {
                         : RenderStateShard.NO_CULL)
                 .setLightmapState(RenderStateShard.LIGHTMAP)
                 .setOverlayState(RenderStateShard.OVERLAY)
-                .setDepthTestState(GalaxyLogDepth.GEQUAL_DEPTH_TEST)
+                .setDepthTestState(depthTest)
                 .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
                 .setOutputState(IrisIntegration.IRIS_TARGET)
                 .createCompositeState(true);
@@ -230,6 +259,7 @@ public final class RingWorldRenderer {
         var textureManager = Minecraft.getInstance().getTextureManager();
         SURFACE_TEXTURES.values().forEach(textureManager::release);
         SURFACE_TEXTURES.clear();
+        DIRTY_SURFACE_TEXTURES.clear();
         SURFACE_RENDER_TYPES.clear();
         SKY_SURFACE_RENDER_TYPES.clear();
         SKY_FALLBACK_SURFACE_RENDER_TYPES.clear();
@@ -308,8 +338,7 @@ public final class RingWorldRenderer {
                         "deepspace_ring_world_sky_surface_" + renderTypeSuffix(key),
                         key,
                         VertexFormat.Mode.TRIANGLES,
-                        true,
-                        RenderStateShard.COLOR_WRITE
+                        true
                 )
         );
     }
@@ -321,27 +350,30 @@ public final class RingWorldRenderer {
                         "deepspace_ring_world_sky_fallback_surface_" + renderTypeSuffix(key),
                         key,
                         VertexFormat.Mode.TRIANGLES,
-                        true,
-                        RenderStateShard.COLOR_DEPTH_WRITE
+                        true
                 )
         );
     }
 
-    /** Sky copies have no world lightmap; use the emissive cutout shader to preserve texture colour. */
+    /** Opaque sky terrain uses controlled brightness without Iris' translucent emissive material. */
     private static RenderType skyCutoutType(
             String name,
             ResourceLocation texture,
             VertexFormat.Mode mode,
-            boolean mipmapped,
-            RenderStateShard.WriteMaskStateShard writeMask
+            boolean mipmapped
     ) {
         var state = RenderType.CompositeState.builder()
-                .setShaderState(RenderStateShard.RENDERTYPE_ENTITY_TRANSLUCENT_EMISSIVE_SHADER)
+                .setShaderState(new RenderStateShard.ShaderStateShard(() -> {
+                    ShaderProgram shader = VeilRenderSystem.setShader(Deepspace.path("ring_sky_surface"));
+                    shader.setTexture("Sampler0", texture);
+                    return VeilRenderBridge.toShaderInstance(shader);
+                }))
                 .setTextureState(new RenderStateShard.TextureStateShard(texture, false, mipmapped))
                 .setTransparencyState(RenderStateShard.NO_TRANSPARENCY)
                 .setCullState(RenderStateShard.NO_CULL)
-                .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
-                .setWriteMaskState(writeMask)
+                .setDepthTestState(GalaxyLogDepth.GEQUAL_DEPTH_TEST)
+                // Remote and local slabs must both occlude later ring geometry rather than bleed together.
+                .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
                 .setOutputState(IrisIntegration.IRIS_TARGET)
                 .createCompositeState(true);
         return RenderType.create(name, DefaultVertexFormat.NEW_ENTITY, mode, 786432, true, false, state);
@@ -405,6 +437,16 @@ public final class RingWorldRenderer {
     }
 
     private static ResourceLocation getSurfaceTexture(Planet planet) {
+        if (DIRTY_SURFACE_TEXTURES.remove(planet.getId())) {
+            ResourceLocation stale = SURFACE_TEXTURES.remove(planet.getId());
+            if (stale != null) {
+                Minecraft.getInstance().getTextureManager().release(stale);
+                SURFACE_RENDER_TYPES.remove(stale);
+                SKY_SURFACE_RENDER_TYPES.remove(stale);
+                SKY_FALLBACK_SURFACE_RENDER_TYPES.remove(stale);
+                GUI_SURFACE_RENDER_TYPES.remove(stale);
+            }
+        }
         ResourceLocation existing = SURFACE_TEXTURES.get(planet.getId());
         if (existing != null) {
             return existing;
@@ -414,12 +456,17 @@ public final class RingWorldRenderer {
         return created;
     }
 
+    /** Rebuild one ring texture lazily after the server publishes new scan data. */
+    public static void invalidateSurfaceTexture(String planetId) {
+        DIRTY_SURFACE_TEXTURES.add(planetId);
+    }
+
     private static ResourceLocation createSurfaceTexture(Planet planet) {
         int[] pixels = createConfiguredSurfacePixels(planet);
         if (pixels == null) {
             // Resample only the texture data; sky-ring geometry, placement, and UVs stay unchanged.
             pixels = PlanetTextureGenerator.generateMapPixels(
-                    planet.getGeneratedSurfaceMap(), SURFACE_WIDTH, SURFACE_HEIGHT);
+                    planet.getGeneratedSurfaceMap(), SURFACE_WIDTH, SURFACE_HEIGHT, true);
             if (pixels.length == 0) {
                 pixels = PlanetTextureGenerator.generatePixels(
                     planet.getGeneratedTextureSeed(),
@@ -583,7 +630,12 @@ public final class RingWorldRenderer {
         }
         poseStack.pushPose();
         FogRange fog = disableFog();
+        float previousScale = GalaxyLogDepth.setGeometryScale(
+                SunRenderer.galaxyRenderScale(starCenter.distanceTo(cameraPosition), true));
         try {
+            // Match the star's camera compression so front and rear ring fragments retain physical depth.
+            float galaxyScale = SunRenderer.galaxyRenderScale(starCenter.distanceTo(cameraPosition), true);
+            poseStack.scale(galaxyScale, galaxyScale, galaxyScale);
             renderCompleteRing(
                     poseStack,
                     bufferSource,
@@ -597,6 +649,8 @@ public final class RingWorldRenderer {
             );
             bufferSource.endBatch();
         } finally {
+            // Flush the galaxy batch before restoring the depth scale for later bodies.
+            GalaxyLogDepth.setGeometryScale(previousScale);
             restoreFog(fog);
             poseStack.popPose();
         }
@@ -648,7 +702,7 @@ public final class RingWorldRenderer {
         poseStack.pushPose();
         float modelScale = worldScale * RING_MODEL_SCALE;
         poseStack.scale(modelScale, modelScale, modelScale);
-        RingWorldGeoRenderer.draw(
+        RingWorldGeoRenderer.drawGuiInterior(
                 poseStack,
                 GUI_RING_COLOR_RENDER_TYPE,
                 RING_SURFACE_LIGHT,
@@ -699,36 +753,50 @@ public final class RingWorldRenderer {
         if (ringEdges.isEmpty() && galaxy.brokenRingSections() == 0) {
             return;
         }
+        float[] previousColor = RenderSystem.getShaderColor().clone();
         poseStack.pushPose();
-        poseStack.translate(
-                starCenter.x - observerOrigin.x,
-                starCenter.y - observerOrigin.y,
-                starCenter.z - observerOrigin.z
-        );
-        float ringRotation = (float) RingWorldDimensions.ROTATION_DEGREES;
-        poseStack.mulPose(Axis.YP.rotationDegrees(ringRotation));
-        if (skyCopy && !skyFallback) {
-            // Remote frames own depth; colour-only world surfaces fill the remaining sky without hiding bones.
-            renderRingFrames(poseStack, bufferSource, galaxy, true, false, hiddenSections);
-            renderModelSurfaces(
-                    poseStack, bufferSource, ringEdges, starCenter,
-                    true, false, hiddenSections, surfaceProjectionMatrix
+        try {
+            if (!skyCopy) {
+                // Preserve alpha and restore the tint after immediate mesh draws to avoid affecting other bodies.
+                RenderSystem.setShaderColor(
+                        previousColor[0] * GALAXY_RING_BRIGHTNESS,
+                        previousColor[1] * GALAXY_RING_BRIGHTNESS,
+                        previousColor[2] * GALAXY_RING_BRIGHTNESS,
+                        previousColor[3]
+                );
+            }
+            poseStack.translate(
+                    starCenter.x - observerOrigin.x,
+                    starCenter.y - observerOrigin.y,
+                    starCenter.z - observerOrigin.z
             );
-        } else if (RingWorldRenderGeometry.surfaceAfterFrame(skyFallback)) {
-            renderRingFrames(poseStack, bufferSource, galaxy, skyCopy, true, hiddenSections);
-            renderModelSurfaces(
-                    poseStack, bufferSource, ringEdges, starCenter,
-                    skyCopy, true, hiddenSections, null
-            );
-        } else {
-            // Surface textures resolve before the surrounding opaque frame.
-            renderModelSurfaces(
-                    poseStack, bufferSource, ringEdges, starCenter,
-                    skyCopy, false, hiddenSections, null
-            );
-            renderRingFrames(poseStack, bufferSource, galaxy, skyCopy, false, hiddenSections);
+            float ringRotation = (float) RingWorldDimensions.ROTATION_DEGREES;
+            poseStack.mulPose(Axis.YP.rotationDegrees(ringRotation));
+            if (skyCopy && !skyFallback) {
+                // Frames and opaque terrain share reversed depth, so each visible face occludes farther geometry.
+                renderRingFrames(poseStack, bufferSource, galaxy, true, false, hiddenSections);
+                renderModelSurfaces(
+                        poseStack, bufferSource, ringEdges, starCenter,
+                        true, false, hiddenSections, surfaceProjectionMatrix
+                );
+            } else if (RingWorldRenderGeometry.surfaceAfterFrame(skyFallback)) {
+                renderRingFrames(poseStack, bufferSource, galaxy, skyCopy, true, hiddenSections);
+                renderModelSurfaces(
+                        poseStack, bufferSource, ringEdges, starCenter,
+                        skyCopy, true, hiddenSections, null
+                );
+            } else {
+                // Surface textures resolve before the surrounding opaque frame.
+                renderModelSurfaces(
+                        poseStack, bufferSource, ringEdges, starCenter,
+                        skyCopy, false, hiddenSections, null
+                );
+                renderRingFrames(poseStack, bufferSource, galaxy, skyCopy, false, hiddenSections);
+            }
+        } finally {
+            RenderSystem.setShaderColor(previousColor[0], previousColor[1], previousColor[2], previousColor[3]);
+            poseStack.popPose();
         }
-        poseStack.popPose();
     }
 
     private static void renderRingFrames(
@@ -786,7 +854,13 @@ public final class RingWorldRenderer {
         Vec3 starCenter = galaxy.sun().getCenter();
         poseStack.pushPose();
         FogRange fog = disableFog();
+        float[] previousColor = RenderSystem.getShaderColor().clone();
         try {
+            // Surface skies have no galaxy-depth owner; initialize the actual target before ring meshes draw.
+            IrisIntegration.beginGalaxyLogDepthPhase();
+            clearSkyRingDepth(0.0D);
+            // Vanilla sky tint/alpha must not discard opaque ring frames in the cutout shader.
+            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             poseStack.mulPose(physicalToSky);
             poseStack.pushPose();
             applySkyPerspectiveScale(poseStack, physicalSun, lateralProjectionScale, depthProjectionScale);
@@ -803,8 +877,26 @@ public final class RingWorldRenderer {
             bufferSource.endBatch();
             // Loaded terrain keeps priority; SunRenderer follows this pass and resolves celestial overlap.
         } finally {
+            // Release the isolated reversed attachment before normal surface-sky and terrain passes resume.
+            clearSkyRingDepth(1.0D);
+            IrisIntegration.endGalaxyLogDepthPhase();
+            RenderSystem.setShaderColor(previousColor[0], previousColor[1], previousColor[2], previousColor[3]);
             restoreFog(fog);
             poseStack.popPose();
+        }
+    }
+
+    /** Clears the same Iris attachment selected by the ring render types, or the native target. */
+    private static void clearSkyRingDepth(double farDepth) {
+        boolean iris = IrisIntegration.isShaderPackEnabled();
+        if (iris) IrisIntegration.saveAndBindPipelineTarget();
+        try {
+            // glClear also obeys the depth write mask left by vanilla sky rendering.
+            RenderSystem.depthMask(true);
+            RenderSystem.clearDepth(farDepth);
+            RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+        } finally {
+            if (iris) IrisIntegration.restorePreviousFramebuffer();
         }
     }
 
@@ -979,16 +1071,17 @@ public final class RingWorldRenderer {
         Vector3f longAxis = placement.longAxis();
         Vector3f inwardAxis = placement.inwardAxis();
         Vector3f upAxis = new Vector3f(0.0F, 1.0F, 0.0F);
-        // Match the atlas slot's 40-pixel lateral offset instead of the cube centre.
+        // Both views place terrain by the inner wall; the GUI draws its star-facing side.
         Vector3f slabCenter = new Vector3f(placement.center())
                 .add(new Vector3f(longAxis).mul(WORLD_SURFACE_TANGENT_OFFSET))
                 .add(new Vector3f(inwardAxis).mul(WORLD_SURFACE_INWARD_OFFSET));
         Vector3f outwardAxis = new Vector3f(inwardAxis).negate();
-        Vector3f frontCenter = new Vector3f(slabCenter).add(new Vector3f(outwardAxis).mul(WORLD_SURFACE_HALF_THICKNESS));
+        Vector3f faceNormal = guiProjection ? inwardAxis : outwardAxis;
+        Vector3f frontCenter = new Vector3f(slabCenter).add(new Vector3f(faceNormal).mul(WORLD_SURFACE_HALF_THICKNESS));
 
-        // The terrain texture belongs to the exterior face so damaged sections match the intact ring shell.
+        // The GUI texture lies just starward of the inner bone wall; the world mesh keeps its prior face.
         emitSurfaceFace(
-                poseStack, surfaceBuffer, frontCenter, longAxis, upAxis, outwardAxis,
+                poseStack, surfaceBuffer, frontCenter, longAxis, upAxis, faceNormal,
                 WORLD_SURFACE_HALF_LENGTH, WORLD_SURFACE_HALF_HEIGHT, inwardAxis,
                 0.0F, 1.0F, 0.0F, 1.0F, guiProjection
         );
@@ -1019,7 +1112,7 @@ public final class RingWorldRenderer {
         int rows = Math.max(1, (int) Math.ceil(halfV * 2.0F / MAX_SURFACE_TILE_SIZE_BLOCKS));
         boolean forwardWinding = new Vector3f(uAxis).cross(vAxis).dot(normalizedNormal) >= 0.0F;
         if (guiProjection) {
-            // GUI projection reverses model-space face orientation; keep only the star-facing inner surface.
+            // GUI projection reverses model-space winding on the star-facing texture slab.
             forwardWinding = RingWorldRenderGeometry.guiSurfaceForwardWinding(forwardWinding);
         }
 

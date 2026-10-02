@@ -1,0 +1,15 @@
+{
+  "name": "Dimension Transitions",
+  "category": "travel",
+  "sortnum": 2,
+  "pages": [
+    {
+      "title": "Changing Worlds",
+      "text": "Space, planetary surfaces, and galaxies use different dimensions. Transfers wait until the destination and physical structure are ready."
+    },
+    {
+      "title": "Passengers",
+      "text": "Passengers travel through relays with their physical structure. After arrival, make sure the destination has finished loading before changing control positions."
+    }
+  ]
+}

@@ -18,6 +18,7 @@ import world.landfall.deepspace.render.PlanetRenderer;
 import world.landfall.deepspace.render.NightSkyPlanetRenderer;
 import world.landfall.deepspace.render.RingWorldRenderer;
 import world.landfall.deepspace.render.SunRenderer;
+import world.landfall.deepspace.render.HyperRelayGeoRenderer;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,7 +28,8 @@ import java.util.Objects;
 /**
  * Network packet for synchronizing planet data from server to client.
  */
-public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, String changedPlanetId)
+public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, String changedPlanetId,
+                               boolean textureChanged)
         implements CustomPacketPayload {
     
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -48,11 +50,11 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
      */
     public PlanetSyncPacket(@NotNull Collection<Planet> planets, @NotNull Collection<Galaxy> galaxies) {
         this(new ArrayList<>(Objects.requireNonNull(planets, "Planets cannot be null")),
-                new ArrayList<>(Objects.requireNonNull(galaxies, "Galaxies cannot be null")), null);
+                new ArrayList<>(Objects.requireNonNull(galaxies, "Galaxies cannot be null")), null, true);
     }
 
     public PlanetSyncPacket(@NotNull Planet planet) {
-        this(List.of(Objects.requireNonNull(planet, "Planet cannot be null")), List.of(), planet.getId());
+        this(List.of(Objects.requireNonNull(planet, "Planet cannot be null")), List.of(), planet.getId(), true);
     }
     
     /**
@@ -68,6 +70,12 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
     /** Creates the minimal packet used when one generated texture has completed. */
     public static PlanetSyncPacket createPlanetUpdatePacket(@NotNull Planet planet) {
         return new PlanetSyncPacket(planet);
+    }
+
+    /** Scan progress updates carry data but leave the current GPU textures intact. */
+    public static PlanetSyncPacket createProgressUpdatePacket(@NotNull Planet planet) {
+        return new PlanetSyncPacket(List.of(Objects.requireNonNull(planet, "Planet cannot be null")),
+                List.of(), planet.getId(), false);
     }
     
     /**
@@ -89,6 +97,7 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
         if (packet.changedPlanetId != null) {
             buffer.writeUtf(packet.changedPlanetId);
         }
+        buffer.writeBoolean(packet.textureChanged);
     }
     
     /**
@@ -109,7 +118,8 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
         }
         List<Galaxy> galaxies = buffer.readList(Galaxy::fromNetwork);
         String changedPlanetId = buffer.readBoolean() ? buffer.readUtf() : null;
-        return new PlanetSyncPacket(planets, galaxies, changedPlanetId);
+        boolean textureChanged = buffer.readBoolean();
+        return new PlanetSyncPacket(planets, galaxies, changedPlanetId, textureChanged);
     }
     
     /**
@@ -128,9 +138,16 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
                 if (Minecraft.getInstance().getSingleplayerServer() == null && !packet.planets.isEmpty()) {
                     PlanetRegistry.replacePlanet(packet.planets.getFirst());
                 }
-                PlanetRenderer.refreshPlanet(packet.changedPlanetId);
+                if (packet.textureChanged) {
+                    PlanetRenderer.refreshPlanet(packet.changedPlanetId);
+                    // Ring textures are cached separately from ordinary planet meshes.
+                    if (!packet.planets.isEmpty() && packet.planets.getFirst().isRingWorldEdge()) {
+                        RingWorldRenderer.invalidateSurfaceTexture(packet.changedPlanetId);
+                    }
+                }
             } else if (Minecraft.getInstance().getSingleplayerServer() == null) {
                 PlanetRegistry.clear();
+                HyperRelayGeoRenderer.clearEffects();
                 for (Galaxy galaxy : packet.galaxies) {
                     PlanetRegistry.registerGalaxy(galaxy);
                 }

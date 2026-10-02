@@ -25,11 +25,10 @@ displayName = "${mod_name}" #mandatory
 # A URL for the "homepage" for this mod, displayed in the mod UI
 #displayURL="https://change.me.to.your.mods.homepage.example.invalid/" #optional
 # A file name (in the root of the mod JAR) containing a logo for display
-#logoFile="deepspace.png" #optional
-# A text field displayed in the mod UI
-credits = "${mod_credits}" #optional
-# A text field displayed in the mod UI
-authors = "${mod_authors}" #optional
+# Bundle the release icon at the JAR root for the mod list.
+logoFile="deepspace.png"
+# Identify the current author and upstream creators in the authors field.
+authors = "${mod_authors}; Original authors: ${mod_original_authors}"
 
 # The description text for the mod (multi line!) (#mandatory)
 description = '''${mod_description}'''
@@ -106,11 +105,24 @@ versionRange="[0,)"
 ordering="AFTER"
 side="BOTH"
 [[dependencies."${mod_id}"]]
+modId="patchouli"
+type="optional"
+versionRange="[0,)"
+ordering="AFTER"
+side="BOTH"
+[[dependencies."${mod_id}"]]
 modId="geckolib"
 type="required"
 versionRange="${geckolib_version_range}"
 ordering="AFTER"
 side="BOTH"
+[[dependencies."${mod_id}"]]
+modId="photon"
+# Photon supplies optional relay light effects; model rendering does not require it.
+type="optional"
+versionRange="[2.1.4,2.2.0)"
+ordering="AFTER"
+side="CLIENT"
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.
