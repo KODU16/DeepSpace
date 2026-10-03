@@ -24,7 +24,7 @@
   "menu.deepspace.creative_mode_tab": "Deepspace",
   "item.deepspace.deepspace_helmet": "DeepSpace Helmet",
   "item.deepspace.jet_helmet.creative": "Creative Jet Helmet",
-  "item.deepspace.jet_helmet.jei": "Jet helmets can be aired up using a fan from Create.",
+  "item.deepspace.jet_helmet.jei": "Jet helmets can be refilled near a redstone-powered oxygenator.",
   "deepspace.hurt.no_air": "%s succumbed to the cold grasp of space.",
   "gui.deepspace.galaxy_arrival.star": "%1$s/%2$s",
   "gui.deepspace.galaxy_arrival.planet_count": "Planets: %s",
@@ -75,5 +75,7 @@
   "gui.deepspace.hud.new_discovery": "New discovery",
   "gui.deepspace.hud.distance": "Distance: %s m",
   "gui.deepspace.hud.unknown_planet": "Unknown planet",
-  "gui.deepspace.hud.surface_scanning": "Surface texture scanning (%s/%s, %s%%)"
+  "gui.deepspace.hud.surface_scanning": "Surface texture scanning (%s/%s, %s%%)",
+  "item.deepspace.raw_zinc": "Raw Zinc",
+  "block.deepspace.raw_zinc_block": "Block of Raw Zinc"
 }

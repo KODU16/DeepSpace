@@ -168,24 +168,19 @@ dependencies {
     // Cross-dimension ships are snapshotted and rebuilt through Photomancy's public blueprint API.
     implementation files("libs/sable-photomancy-1.0.0.jar")
     // Sable supplies the runtime sublevel tracking and entity projection APIs.
-    implementation("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}")
+    implementation("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}") {
+        // Sable supports standalone operation; omit its optional Create rendering stack from this build.
+        exclude group: "com.simibubi.create"
+        exclude group: "net.createmod.ponder"
+        exclude group: "dev.engine-room.flywheel"
+        exclude group: "com.tterrag.registrate"
+    }
     // Sable publishes Rapier as runtime-only, so validate and resolve it independently of compilation.
     runtimeOnly("dev.ryanhcode.sable:sable-sable_rapier-${minecraft_version}:${sable_version}")
 
-    // Create mod
-    implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") {
-        transitive = false
-    }
-    implementation("net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}")
-    compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_version}")
-    runtimeOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
-    implementation("com.tterrag.registrate:Registrate:${registrate_version}")
-
+    // Gameplay and rendering use standalone Minecraft/NeoForge APIs, without the Create library stack.
     implementation "mezz.jei:jei-${project.minecraft_version}-common-api:${jei_version}"
 
-    implementation "dev.eriksonn.aeronautics:aeronautics-neoforge-1.21.1:1.3.0"
-    implementation "dev.ryanhcode.offroad:offroad-neoforge-1.21.1:1.3.0"
-    implementation "dev.simulated_team.simulated:simulated-neoforge-1.21.1:1.3.0"
     // Add the DH Api for compile time development
     //compileOnly "blank:DistantHorizonsApi:4.0.0"
     //compileOnly fg.deobf("blank:DistantHorizonsAPI:1.0.0") // local Jar file, file should be named in the format: "DistantHorizonsAPI-VERSION.jar" (IE "DistantHorizonsAPI-1.0.0.jar") or "DistantHorizonsAPI.jar"

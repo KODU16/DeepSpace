@@ -1,6 +1,5 @@
 package world.landfall.deepspace;
 
-import com.simibubi.create.content.logistics.vault.ItemVaultBlock;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -19,6 +18,9 @@ import java.util.function.Supplier;
 
 public class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(Deepspace.MODID);
+    // Native zinc replaces the external raw-zinc drop while retaining the existing lunar ore.
+    public static final DeferredItem<Item> RAW_ZINC_ITEM = ITEMS.registerItem("raw_zinc", Item::new);
+    public static final DeferredItem<BlockItem> RAW_ZINC_BLOCK_ITEM = ITEMS.registerSimpleBlockItem(ModBlocks.RAW_ZINC_BLOCK);
     public static final DeferredItem<Item> OXYGENATOR_BLOCK_ITEM = ITEMS.register("oxygenator", OxygenatorBlockItem::new);
     public static final DeferredItem<BucketItem> OXYGEN_BUCKET = ITEMS.register("oxygen_bucket", () ->
             new BucketItem(ModFluids.OXYGEN.get(), new Item.Properties()

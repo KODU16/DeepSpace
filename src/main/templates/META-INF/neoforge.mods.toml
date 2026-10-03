@@ -75,12 +75,6 @@ versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 [[dependencies."${mod_id}"]]
-modId="create"
-type="required"
-versionRange="[6.0.7,6.1.0)"
-ordering="NONE"
-side="BOTH"
-[[dependencies."${mod_id}"]]
 modId="veil"
 type="required"
 versionRange="[4.0.0,5)"

@@ -11,7 +11,7 @@
             "probability": 0.1
           },
           "state": {
-            "Name": "create:raw_zinc_block"
+            "Name": "deepspace:raw_zinc_block"
           }
         },
         {

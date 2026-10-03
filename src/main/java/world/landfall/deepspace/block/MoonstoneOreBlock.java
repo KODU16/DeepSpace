@@ -1,6 +1,5 @@
 package world.landfall.deepspace.block;
 
-import com.simibubi.create.AllItems;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;

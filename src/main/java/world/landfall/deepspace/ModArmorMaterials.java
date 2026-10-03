@@ -1,6 +1,5 @@
 package world.landfall.deepspace;
 
-import com.simibubi.create.content.kinetics.mechanicalArm.ArmItem;
 import net.minecraft.Util;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;

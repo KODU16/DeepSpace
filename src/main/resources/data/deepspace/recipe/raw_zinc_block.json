@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "ZZZ",
+    "ZZZ",
+    "ZZZ"
+  ],
+  "key": {
+    "Z": {
+      "item": "deepspace:raw_zinc"
+    }
+  },
+  "result": {
+    "id": "deepspace:raw_zinc_block",
+    "count": 1
+  }
+}

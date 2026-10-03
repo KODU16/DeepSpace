@@ -23,7 +23,6 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import world.landfall.deepspace.dimension.SpaceDimensionType;
-import world.landfall.deepspace.integration.CreateIntegration;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.render.SpaceRenderSystem;
 import world.landfall.deepspace.worldgen.ModChunkGenerators;
@@ -87,7 +86,6 @@ public class Deepspace {
         // Custom worldgen features must be registered before datapack worldgen entries are decoded.
         ModFeatures.register(modEventBus);
 
-        CreateIntegration.register(modEventBus);
         // Register the Deferred Register to the mod event bus so tabs get registered
         CREATIVE_MODE_TABS.register(modEventBus);
 
@@ -115,7 +113,6 @@ public class Deepspace {
     private void commonSetup(final FMLCommonSetupEvent event) {
         LOGGER.info("Performing common setup for Deep Space");
         PlanetRegistry.init();
-        ModBlockStressValues.register();
     }
 
     // Add the example block item to the building blocks tab

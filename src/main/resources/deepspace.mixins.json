@@ -9,7 +9,6 @@
     "MixinSableDimensionGravity",
     "MixinFishingHookGravity",
     "MixinBoatGravity",
-    "MixinAirCurrent",
     "MixinGalaxyChunkMap",
     "MixinGameRenderer",
     "MixinInfinityEffectGiver",

@@ -30,6 +30,8 @@ atlassian-ide-plugin.xml
 *.nar
 *.ear
 *.zip
+# Publish the Tropica example separately from the mod JAR.
+!examples/datapacks/deepspace_tropical_planet.zip
 *.tar.gz
 *.rar
 

@@ -54,7 +54,6 @@ import world.landfall.deepspace.planet.RingWorldOriginState;
 import world.landfall.deepspace.planet.RingWorldNoonTime;
 import world.landfall.deepspace.planet.Sun;
 import world.landfall.deepspace.planet.StarIdentity;
-import dev.simulated_team.simulated.content.physics_staff.PhysicsStaffServerHandler;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -1113,7 +1112,19 @@ public final class InfiniteDimensionsIntegration {
             ensureGraphWormhole(server, system.galaxy, system.chainIndex, neighbor);
         }
         // Dynamic dimensions are created after login, so publish Simulated's empty-or-persisted lock state now.
-        server.getPlayerList().getPlayers().forEach(PhysicsStaffServerHandler::sendAllData);
+        syncOptionalPhysicsStaff(server);
+    }
+
+    /** Synchronizes the optional physics staff without linking its Create-based mod into core initialization. */
+    private static void syncOptionalPhysicsStaff(MinecraftServer server) {
+        if (!ModList.get().isLoaded("simulated")) return;
+        try {
+            Method send = Class.forName("dev.simulated_team.simulated.content.physics_staff.PhysicsStaffServerHandler")
+                    .getMethod("sendAllData", ServerPlayer.class);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) send.invoke(null, player);
+        } catch (ReflectiveOperationException error) {
+            LOGGER.warn("Unable to synchronize optional Simulated physics staff", error);
+        }
     }
 
     /** Adds a missing endpoint without moving any existing relay or regenerating planetary terrain. */

@@ -15,5 +15,7 @@
   "item.deepspace.jet_helmet.tooltip": "kon mute: ",
   "menu.deepspace.creative_mode_tab": "tomo mute",
   "item.deepspace.jet_helmet.creative": "lawa len wawa ala pini",
-  "item.deepspace.jet_helmet.jei": "lawa len wawa li ale kepeken ilo ken Create."
+  "item.deepspace.jet_helmet.jei": "ilo lawa li kama jo e kon lon poka ilo kon pi wawa redstone.",
+  "item.deepspace.raw_zinc": "Raw Zinc",
+  "block.deepspace.raw_zinc_block": "Block of Raw Zinc"
 }

@@ -58,5 +58,8 @@
   "gui.deepspace.hud.new_discovery": "新发现",
   "gui.deepspace.hud.distance": "距离：%s米",
   "gui.deepspace.hud.unknown_planet": "未知的星球",
-  "gui.deepspace.hud.surface_scanning": "表面纹理扫描中（%s/%s，%s%%）"
+  "gui.deepspace.hud.surface_scanning": "表面纹理扫描中（%s/%s，%s%%）",
+  "item.deepspace.jet_helmet.jei": "喷气头盔可在红石驱动的供氧器附近充氧。",
+  "item.deepspace.raw_zinc": "粗锌",
+  "block.deepspace.raw_zinc_block": "粗锌块"
 }

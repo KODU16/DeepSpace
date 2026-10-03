@@ -1,32 +1,10 @@
 package world.landfall.deepspace.blockentity;
 
-import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-import com.mojang.datafixers.types.Type;
-import com.mojang.logging.LogUtils;
-import com.simibubi.create.AllBlocks;
-import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
-import com.simibubi.create.content.kinetics.base.KineticBlockEntityRenderer;
-import com.simibubi.create.content.kinetics.base.ShaftRenderer;
-import com.simibubi.create.content.kinetics.simpleRelays.CogWheelBlock;
-import com.simibubi.create.foundation.utility.CreateLang;
-import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
-import dev.ryanhcode.sable.companion.SableCompanion;
-import dev.ryanhcode.sable.companion.SubLevelAccess;
-import dev.ryanhcode.sable.companion.math.Pose3dc;
-import dev.ryanhcode.sable.sublevel.SubLevel;
-import foundry.veil.api.client.registry.LightTypeRegistry;
-import foundry.veil.api.client.render.CullFrustum;
+import dev.ryanhcode.sable.Sable;
 import foundry.veil.api.client.render.VeilRenderBridge;
 import foundry.veil.api.client.render.VeilRenderSystem;
-import foundry.veil.api.client.render.light.data.LightData;
-import foundry.veil.api.client.render.light.data.PointLightData;
-import foundry.veil.api.client.render.light.renderer.LightRenderHandle;
-import foundry.veil.api.client.render.light.renderer.LightRenderer;
-import foundry.veil.api.client.render.shader.program.ShaderProgram;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderStateShard;
@@ -34,224 +12,148 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Vec3i;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.PathfinderMob;
-import net.minecraft.world.entity.ai.navigation.PathNavigation;
-import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.minecraft.world.level.lighting.LightEngine;
-import net.minecraft.world.level.lighting.LightEventListener;
-import net.minecraft.world.level.pathfinder.FlyNodeEvaluator;
-import net.minecraft.world.level.pathfinder.PathFinder;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
-import org.joml.Vector3d;
-import org.joml.Vector3f;
-import org.slf4j.Logger;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.ModAttatchments;
 import world.landfall.deepspace.ModBlocks;
-import world.landfall.deepspace.block.OxygenatorBlock;
+import world.landfall.deepspace.item.JetHelmetItem;
 import world.landfall.deepspace.integration.IrisIntegration;
 import world.landfall.deepspace.render.shapes.Sphere;
 
-import java.util.List;
-import java.util.Set;
-
-public class OxygenatorBlockEntity extends KineticBlockEntity {
-
-    static Logger LOGGER = LogUtils.getLogger();
+/** Provides ship-aware oxygen and helmet charging without a kinetic network. */
+public class OxygenatorBlockEntity extends BlockEntity {
     public static final BlockEntityType<OxygenatorBlockEntity> TYPE = BlockEntityType.Builder.of(
-            OxygenatorBlockEntity::new,
-            ModBlocks.OXYGENATOR_BLOCK.get()
-    ).build(null);
-    private boolean enabled = false;
-    private int radius = 5;
+            OxygenatorBlockEntity::new, ModBlocks.OXYGENATOR_BLOCK.get()).build(null);
+    private boolean enabled;
+    private int radius = 4;
+
     public OxygenatorBlockEntity(BlockPos pos, BlockState state) {
         super(TYPE, pos, state);
-        var vPos = pos.getCenter().toVector3f();
-
     }
 
-    @Override
-    public void onLoad() {
-        super.onLoad();
-
-    }
-
-    @Override
-    public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-//        tooltip.addFirst(Component.literal("    Radius: " + this.radius + " blocks"));
-        CreateLang.text("Kinetic Stats:")
-                .forGoggles(tooltip);
-        CreateLang.text("Radius: ")
-                .style(ChatFormatting.GRAY)
-                .forGoggles(tooltip);
-        CreateLang.text(" " + radius + " blocks")
-                .style(ChatFormatting.GOLD)
-                .add(Component.literal(" at current speed").withStyle(ChatFormatting.DARK_GRAY))
-                .forGoggles(tooltip);
-        CreateLang.text("Kinetic Stress Impact: ")
-                .style(ChatFormatting.GRAY)
-                .forGoggles(tooltip);
-        CreateLang.text(" " + this.lastStressApplied + "SU")
-                .style(ChatFormatting.AQUA)
-                .add(Component.literal(" at current speed").withStyle(ChatFormatting.DARK_GRAY))
-                .forGoggles(tooltip);
-        return true;
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        tick(this.level, this.worldPosition, level.getBlockState(this.worldPosition), this);
-    }
-
-    public static void tick(Level level, BlockPos pos, BlockState state, OxygenatorBlockEntity blockEntity) {
-        if (!state.is(ModBlocks.OXYGENATOR_BLOCK.get()))
-            return;
-        var radius = blockEntity.radius;
-//        var corner1 = pos.offset(radius, radius, radius);
-//        var corner2 = pos.offset(-radius, -radius, -radius);
-        var ticks = blockEntity.lazyTickCounter;
-        if (ticks % 10 != 0)
-            return;
-
-//        var newstate = state
-//                .setValue(OxygenatorBlock.ACTIVE, Math.abs(blockEntity.speed) >= 4f)
-//                .setValue(OxygenatorBlock.RADIUS, Math.clamp((int)(blockEntity.speed / 2f),5, 30));
-
-        blockEntity.enabled = (Math.abs(blockEntity.speed) >= 4f) && !blockEntity.overStressed;
-        blockEntity.radius = Math.clamp((int)(Math.abs(blockEntity.speed) / 2f), 4, 32);
-
-
-//        level.getNearbyPlayers(TargetingConditions.DEFAULT, null, AABB.ofSize(
-//                blockEntity.worldPosition.getCenter(), radius, radius, radius
-//        )).forEach((player) -> {
-//            if (blockEntity.enabled && player.position().distanceTo(pos.getCenter()) < radius) {
-//                player.setData(ModAttatchments.LAST_OXYGENATED, 0f);
-//            }
-//        });
-        level.players().forEach(p -> {
-            SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(blockEntity.getLevel(), blockEntity.worldPosition);
-            Vec3 realPos;
-            if (subLevel != null){
-                var pose = subLevel.logicalPose();
-                realPos = pose.transformPosition(pos.getCenter());
-            }else {
-                realPos = pos.getCenter();
-            }
-            if (blockEntity.enabled && p.position().distanceTo(realPos) < radius) {
-                p.setData(ModAttatchments.LAST_OXYGENATED, 0f);
-                LOGGER.debug("Oxygenated Player");
-
-            } else {
-                LOGGER.debug("Too far away!");
-            }
-        });
-
-    }
-
-    public static class Renderer extends ShaftRenderer<OxygenatorBlockEntity> {
-
-
-        public static final ResourceLocation BUBBLE_SHADER_LOC = Deepspace.path("bubble");
-        public static final RenderStateShard.ShaderStateShard BUBBLE_SHADER_SHARD = new RenderStateShard.ShaderStateShard(() -> {
-            ShaderProgram shader = VeilRenderSystem.setShader(BUBBLE_SHADER_LOC);
-            return VeilRenderBridge.toShaderInstance(shader);
-        });
-
-        public Renderer(BlockEntityRendererProvider.Context context) {
-            super(context);
+    public static void tick(Level level, BlockPos pos, BlockState state, OxygenatorBlockEntity entity) {
+        if (level.isClientSide || level.getGameTime() % 10 != 0 || !state.is(ModBlocks.OXYGENATOR_BLOCK.get())) return;
+        int signal = level.getBestNeighborSignal(pos);
+        boolean enabled = signal > 0;
+        int radius = radiusForSignal(signal);
+        if (entity.enabled != enabled || entity.radius != radius) {
+            entity.enabled = enabled;
+            entity.radius = radius;
+            entity.setChanged();
+            level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
         }
-
-
-        private static RenderType type(boolean shaderPack) {
-//            return RenderType.SOLID;
-            var renderType = RenderType.CompositeState.builder()
-                    .setShaderState(BUBBLE_SHADER_SHARD)
-                    .setCullState(RenderStateShard.CullStateShard.NO_CULL)
-                    .setTransparencyState(RenderStateShard.ADDITIVE_TRANSPARENCY)
-                    .setLayeringState(RenderStateShard.LayeringStateShard.VIEW_OFFSET_Z_LAYERING)
-                    .setWriteMaskState(RenderStateShard.WriteMaskStateShard.COLOR_WRITE)
-                    .createCompositeState(true);
-            var renderTypeShaderPack = RenderType.CompositeState.builder()
-                    .setShaderState(BUBBLE_SHADER_SHARD)
-                    .setCullState(RenderStateShard.CullStateShard.NO_CULL)
-                    .setTransparencyState(RenderStateShard.GLINT_TRANSPARENCY)
-                    .setLayeringState(RenderStateShard.LayeringStateShard.VIEW_OFFSET_Z_LAYERING)
-                    .setWriteMaskState(RenderStateShard.WriteMaskStateShard.COLOR_WRITE)
-                    .createCompositeState(true);
-            return RenderType.create(
-                    "bubble",
-                    DefaultVertexFormat.BLOCK,
-                    VertexFormat.Mode.TRIANGLES,
-                    186432, true, false,
-                    shaderPack ? renderTypeShaderPack : renderType
-            );
+        if (!enabled) return;
+        Vec3 center = Sable.HELPER.projectOutOfSubLevel(level, pos.getCenter());
+        // Compare projected positions so players and dropped helmets aboard the same ship are included.
+        for (var player : level.players()) {
+            if (Sable.HELPER.projectOutOfSubLevel(level, player.position()).distanceToSqr(center) < radius * radius) {
+                player.setData(ModAttatchments.LAST_OXYGENATED, 0f);
+                refillHelmet(player.getItemBySlot(EquipmentSlot.HEAD));
+            }
         }
+        // Search both plot and world coordinates when the generator is mounted on a ship.
+        var nearbyItems = new java.util.LinkedHashSet<>(level.getEntitiesOfClass(ItemEntity.class,
+                new net.minecraft.world.phys.AABB(pos).inflate(radius)));
+        nearbyItems.addAll(level.getEntitiesOfClass(ItemEntity.class,
+                new net.minecraft.world.phys.AABB(center, center).inflate(radius)));
+        for (var item : nearbyItems) {
+            if (Sable.HELPER.projectOutOfSubLevel(level, item.position()).distanceToSqr(center) < radius * radius) {
+                refillHelmet(item.getItem());
+            }
+        }
+    }
 
+    /** Redstone strength scales the former 4-to-32-block oxygen range. */
+    public static int radiusForSignal(int signal) {
+        return 4 + 28 * Math.clamp(signal, 0, 15) / 15;
+    }
+
+    private static void refillHelmet(ItemStack stack) {
+        var oxygen = stack.get(JetHelmetItem.JetHelmetComponent.SUPPLIER);
+        if (oxygen != null && !oxygen.infinite() && oxygen.amount() < oxygen.capacity()) {
+            stack.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, oxygen.withAmount(oxygen.amount() + 25));
+        }
+    }
+
+    @Override
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        tag.putBoolean("Enabled", enabled);
+        tag.putInt("Radius", radius);
+    }
+
+    @Override
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        enabled = tag.getBoolean("Enabled");
+        radius = Math.clamp(tag.getInt("Radius"), 4, 32);
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveWithoutMetadata(registries);
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    /** Keeps the authored bubble while the block model supplies its standalone casing. */
+    public static class Renderer implements BlockEntityRenderer<OxygenatorBlockEntity> {
+        private Sphere sphere;
+        private int renderedRadius;
+        private static final RenderStateShard.ShaderStateShard BUBBLE_SHADER = new RenderStateShard.ShaderStateShard(() ->
+                VeilRenderBridge.toShaderInstance(VeilRenderSystem.setShader(Deepspace.path("bubble"))));
+        private static final RenderType BUBBLE = bubbleType(false);
+        private static final RenderType SHADER_BUBBLE = bubbleType(true);
+
+        public Renderer(BlockEntityRendererProvider.Context context) {}
+
+        private static RenderType bubbleType(boolean shaderPack) {
+            var state = RenderType.CompositeState.builder().setShaderState(BUBBLE_SHADER)
+                    .setCullState(RenderStateShard.NO_CULL)
+                    .setTransparencyState(shaderPack ? RenderStateShard.GLINT_TRANSPARENCY : RenderStateShard.ADDITIVE_TRANSPARENCY)
+                    .setLayeringState(RenderStateShard.VIEW_OFFSET_Z_LAYERING)
+                    .setWriteMaskState(RenderStateShard.COLOR_WRITE).createCompositeState(true);
+            return RenderType.create("deepspace_oxygen_bubble", DefaultVertexFormat.BLOCK,
+                    VertexFormat.Mode.TRIANGLES, 186432, true, false, state);
+        }
 
         @Override
-        public void renderSafe(OxygenatorBlockEntity oxygenatorBlockEntity, float v, PoseStack poseStack, MultiBufferSource multiBufferSource, int i, int i1) {
-
-            var state = oxygenatorBlockEntity.getBlockState();
-            if (!state.is(ModBlocks.OXYGENATOR_BLOCK))
-                return;
-            var mesh = new Sphere(oxygenatorBlockEntity.radius, 32, 32);
-            var cam = Minecraft.getInstance().gameRenderer.getMainCamera();
-            var type = type(IrisIntegration.isShaderPackEnabled());
-            var shaftBuf = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP);
-            var buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP);
-//            ShaftRenderer.renderRotatingKineticBlock(oxygenatorBlockEntity, state, poseStack, shaftBuf, i);
-            VeilRenderSystem.setShader(Deepspace.path("bubble"));
-            var enabled = oxygenatorBlockEntity.enabled;
-            var TIME_UNIFORM = VeilRenderSystem.getShader().getUniform("Time");
-            TIME_UNIFORM.setFloat((oxygenatorBlockEntity.level.getDayTime() + v) / 2f);
-            var fakeShaft = AllBlocks.SHAFT.getDefaultState().setValue(BlockStateProperties.AXIS, state.getValue(BlockStateProperties.AXIS));
-            KineticBlockEntityRenderer.renderRotatingKineticBlock(oxygenatorBlockEntity, fakeShaft, poseStack, shaftBuf, i);
-
-            getRenderType(oxygenatorBlockEntity, fakeShaft).draw(shaftBuf.buildOrThrow());
-            if (!enabled)
-                return;
+        public void render(OxygenatorBlockEntity entity, float partialTick, PoseStack poseStack,
+                           MultiBufferSource buffers, int light, int overlay) {
+            if (!entity.enabled || entity.getLevel() == null) return;
+            if (sphere == null || renderedRadius != entity.radius) {
+                renderedRadius = entity.radius;
+                sphere = new Sphere(renderedRadius, 32, 32);
+            }
+            var shader = VeilRenderSystem.setShader(Deepspace.path("bubble"));
+            shader.getUniform("Time").setFloat((entity.getLevel().getDayTime() + partialTick) / 2f);
             RenderSystem.setShaderTexture(0, Deepspace.path("textures/atmosphere.png"));
-            poseStack.pushPose();
-
-            SubLevelAccess levelAccess = SableCompanion.INSTANCE.getContaining(oxygenatorBlockEntity.getLevel(), oxygenatorBlockEntity.worldPosition);
-            if (levelAccess != null){
-                Pose3dc pose = levelAccess.logicalPose();
-                mesh.render(poseStack, buf, pose.transformPosition(oxygenatorBlockEntity.worldPosition.getCenter()).toVector3f().sub(cam.getPosition().toVector3f()), new Quaternionf());
-            }
-            else{
-                mesh.render(poseStack, buf, oxygenatorBlockEntity.worldPosition.getCenter().toVector3f().sub(cam.getPosition().toVector3f()), new Quaternionf());
-            }
-
-            type.draw(buf.buildOrThrow());
-
-//            super.renderSafe(oxygenatorBlockEntity, v, poseStack, multiBufferSource, i, i1);
-            poseStack.popPose();
-
-
+            var buffer = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.BLOCK);
+            Vec3 center = Sable.HELPER.projectOutOfSubLevel(entity.getLevel(), entity.getBlockPos().getCenter());
+            Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+            sphere.render(poseStack, buffer, center.subtract(camera).toVector3f(), new Quaternionf());
+            (IrisIntegration.isShaderPackEnabled() ? SHADER_BUBBLE : BUBBLE).draw(buffer.buildOrThrow());
         }
 
         @Override
-        public boolean shouldRenderOffScreen(OxygenatorBlockEntity blockEntity) {
-            return true;
-        }
+        public boolean shouldRenderOffScreen(OxygenatorBlockEntity entity) { return true; }
 
         @Override
-        public int getViewDistance() {
-            return 500;
-        }
+        public int getViewDistance() { return 500; }
     }
 }

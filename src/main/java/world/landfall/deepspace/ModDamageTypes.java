@@ -1,6 +1,5 @@
 package world.landfall.deepspace;
 
-import com.simibubi.create.foundation.damageTypes.DamageTypeBuilder;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;

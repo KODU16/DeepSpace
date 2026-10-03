@@ -1,7 +1,5 @@
 package world.landfall.deepspace;
 
-import com.simibubi.create.AllItems;
-import net.createmod.catnip.math.VoxelShaper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -40,7 +38,10 @@ public class ModBlocks {
                     .mapColor(MapColor.COLOR_LIGHT_BLUE)
                     .noLootTable()));
     public static final DeferredBlock<Block> GROUND_SOLAR_PANEL_BLOCK = BLOCKS.register("ground_solar_panel", GroundSolarPanelBlock::new);
-    public static final DeferredBlock<Block> MOONSTONE_ZINC_ORE_BLOCK = BLOCKS.register("moonstone_zinc_ore_block", () -> new MoonstoneOreBlock(AllItems.RAW_ZINC));
+    // Zinc keeps its own registry entries so lunar generation never references Create's registries.
+    public static final DeferredBlock<Block> RAW_ZINC_BLOCK = BLOCKS.register("raw_zinc_block", () ->
+            new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.RAW_IRON_BLOCK)));
+    public static final DeferredBlock<Block> MOONSTONE_ZINC_ORE_BLOCK = BLOCKS.register("moonstone_zinc_ore_block", () -> new MoonstoneOreBlock(ModItems.RAW_ZINC_ITEM::get));
     public static final DeferredBlock<Block> MOONSTONE_QUARTZ_ORE_BLOCK = BLOCKS.register("moonstone_quartz_ore_block", () -> new MoonstoneOreBlock(() -> Items.QUARTZ));
     public static final DeferredBlock<Block> MOONSTONE_IRON_ORE_BLOCK = BLOCKS.register("moonstone_iron_ore_block", () -> new MoonstoneOreBlock(() -> Items.RAW_IRON));
     public static final DeferredBlock<Block> MOONSTONE_GOLD_ORE_BLOCK = BLOCKS.register("moonstone_gold_ore_block", () -> new MoonstoneOreBlock(() -> Items.RAW_GOLD));

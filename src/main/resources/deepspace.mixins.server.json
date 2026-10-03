@@ -5,11 +5,9 @@
   "compatibilityLevel": "JAVA_8",
   "refmap": "deepspace.mixins.refmap.json",
   "mixins": [
-    "MixinAirCurrent",
     "MixinDisableInfinityBookPortals",
     "MixinGalaxyChunkMap",
     "MixinInfinityRandomDimension",
-    "MixinWindmillBearingBlockEntity",
     "MixinLivingEntity",
     "MixinSubLevelHeatMapManager",
     "SubLevelHeatMapManagerAccessor"

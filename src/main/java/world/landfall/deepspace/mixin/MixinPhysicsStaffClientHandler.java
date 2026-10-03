@@ -1,11 +1,11 @@
 package world.landfall.deepspace.mixin;
 
 import dev.ryanhcode.sable.sublevel.SubLevel;
-import dev.simulated_team.simulated.content.physics_staff.PhysicsStaffClientHandler;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,7 +16,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /** Treats an unsynchronized dynamic dimension as having no physics-staff locks. */
-@Mixin(value = PhysicsStaffClientHandler.class, remap = false)
+// Simulated is an optional compatibility target, not a load-time dependency.
+@Pseudo
+@Mixin(targets = "dev.simulated_team.simulated.content.physics_staff.PhysicsStaffClientHandler", remap = false)
 public abstract class MixinPhysicsStaffClientHandler {
     @Shadow @Final
     private Map<ResourceKey<Level>, List<UUID>> locks;

@@ -27,7 +27,6 @@ authors.
 
 - Minecraft 1.21.1
 - NeoForge 21.1.200 or newer in the 21.1 release line
-- Create 6.0.7 or newer, below 6.1.0
 - Veil 4.x
 - Sable 2.0.3
 - Java 21 for development and builds
@@ -99,8 +98,23 @@ Data packs may add planets under
 `data/<namespace>/deepspace/planets/<planet>.json` using the same fields as a
 planet entry above. Data-pack planets are additive and override matching IDs
 from the common configuration. Run `/reload` to reload, resample, and synchronize
-them. A Tropicraft example is available under
-`generated_datapacks/deepspace_tropical_planet`.
+them.
+
+### Download the Tropica example datapack
+
+[Download deepspace_tropical_planet.zip](https://github.com/KODU16/DeepSpace/raw/refs/heads/main/examples/datapacks/deepspace_tropical_planet.zip)
+
+This example adds **Tropica** to the initial galaxy, linking it to the
+`tropicraft:tropics` dimension. It requires **Tropicraft** and **Deep Space**,
+and uses a dynamically generated surface texture.
+
+Place the ZIP directly in your world's `datapacks` directory, then re-enter
+the world or run `/reload`. Run `/planets list` to check that Tropica is listed.
+If using a global datapack loader, you may instead extract the archive into
+its configured required-data directory.
+
+The downloadable archive is stored in `examples/datapacks/`, outside all
+Gradle resource directories, and is distributed separately from the mod JAR.
 
 If a procedurally textured planet renders incorrectly, run
 `/deepspaceclient texturedebug`. The client writes `report.txt` plus the actual
