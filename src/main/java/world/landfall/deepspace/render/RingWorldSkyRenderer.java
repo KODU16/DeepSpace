@@ -27,6 +27,7 @@ import java.util.List;
  * segments continue from both horizons and meet behind the sun.
  */
 public final class RingWorldSkyRenderer {
+    // The planet-surface sky keeps the authored ring size regardless of the saved space multiplier.
     private static final float SKY_RADIUS_FRACTION = 0.85F;
     private static final float SKY_LATERAL_PERSPECTIVE_FRACTION = 0.70F;
 
@@ -70,12 +71,12 @@ public final class RingWorldSkyRenderer {
         if (galaxy == null) {
             return;
         }
-        Vec3 starCenter = galaxy.sun().getCenter();
+        Vec3 starCenter = galaxy.sun().getUnscaledCenter();
         int observerSection = RingWorldDimensions.nearestSectionIndex(
-                observer.getCenter().x, observer.getCenter().z, starCenter.x, starCenter.z
+                observer.getUnscaledCenter().x, observer.getUnscaledCenter().z, starCenter.x, starCenter.z
         );
-        Vec3 observerCenter = observer.getCenter();
-        Vec3 observerHalfSize = observer.getBoundingBoxMax().subtract(observer.getBoundingBoxMin()).scale(0.5D);
+        Vec3 observerCenter = observer.getUnscaledCenter();
+        Vec3 observerHalfSize = observer.getUnscaledBoundingBoxMax().subtract(observer.getUnscaledBoundingBoxMin()).scale(0.5D);
         Sun sun = galaxy.sun();
         List<Planet> ringEdges = PlanetRegistry.getPlanetsForGalaxy(galaxy.dimension()).stream()
                 .filter(Planet::isRingWorldEdge)
@@ -84,7 +85,7 @@ public final class RingWorldSkyRenderer {
             return;
         }
 
-        Vec3 physicalSunDirection = sun.getCenter().subtract(observerCenter).normalize();
+        Vec3 physicalSunDirection = sun.getUnscaledCenter().subtract(observerCenter).normalize();
         Vector3f physicalSun = physicalSunDirection.toVector3f();
         // Use the exact same native/BSL celestial direction as the visible host star.
         float[] celestial = SunRenderer.ringWorldCelestialDirection();
@@ -129,7 +130,7 @@ public final class RingWorldSkyRenderer {
     /** Measures the full remote span so anisotropic sky scaling keeps shared endpoints aligned. */
     private static double farthestRemoteCorner(Vec3 origin, Galaxy galaxy, int observerSection) {
         double farthest = 0.0D;
-        Vec3 starCenter = galaxy.sun().getCenter();
+        Vec3 starCenter = galaxy.sun().getUnscaledCenter();
         for (int index = 0; index < RingWorldDimensions.SECTION_COUNT; index++) {
             if (index == observerSection) {
                 continue;

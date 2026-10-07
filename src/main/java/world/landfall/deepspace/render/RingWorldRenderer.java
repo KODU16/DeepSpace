@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.integration.IrisIntegration;
 import world.landfall.deepspace.planet.Galaxy;
+import world.landfall.deepspace.planet.SpaceObjectScale;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.planet.PlanetTextureGenerator;
@@ -698,6 +699,8 @@ public final class RingWorldRenderer {
         float ringRotation = (float) RingWorldDimensions.ROTATION_DEGREES;
         poseStack.mulPose(Axis.YP.rotationDegrees(ringRotation));
 
+        // Authored frame and surface meshes share the save scale in the system overview.
+        worldScale *= (float) SpaceObjectScale.size();
         renderGuiModelSurfaces(poseStack, bufferSource, ringEdges, galaxy.sun().getCenter(), worldScale);
         poseStack.pushPose();
         float modelScale = worldScale * RING_MODEL_SCALE;
@@ -770,6 +773,11 @@ public final class RingWorldRenderer {
                     starCenter.y - observerOrigin.y,
                     starCenter.z - observerOrigin.z
             );
+            if (!skyCopy) {
+                // Resize authored meshes around the ring host center; surface skies retain original geometry.
+                float scale = (float) SpaceObjectScale.size();
+                poseStack.scale(scale, scale, scale);
+            }
             float ringRotation = (float) RingWorldDimensions.ROTATION_DEGREES;
             poseStack.mulPose(Axis.YP.rotationDegrees(ringRotation));
             if (skyCopy && !skyFallback) {
@@ -851,7 +859,7 @@ public final class RingWorldRenderer {
             float lateralProjectionScale,
             float depthProjectionScale
     ) {
-        Vec3 starCenter = galaxy.sun().getCenter();
+        Vec3 starCenter = galaxy.sun().getUnscaledCenter();
         poseStack.pushPose();
         FogRange fog = disableFog();
         float[] previousColor = RenderSystem.getShaderColor().clone();
@@ -993,8 +1001,9 @@ public final class RingWorldRenderer {
             Matrix4fc projectionMatrix
     ) {
         for (Planet planet : ringEdges) {
+            // Section identity is authored geometry and must stay stable across size multipliers.
             int sectionIndex = RingWorldDimensions.nearestSectionIndex(
-                    planet.getCenter().x, planet.getCenter().z, starCenter.x, starCenter.z
+                    planet.getUnscaledCenter().x, planet.getUnscaledCenter().z, starCenter.x, starCenter.z
             );
             if (RingWorldDamage.isBroken(hiddenSections, sectionIndex)) {
                 // The local dimension's real terrain replaces its near-zero-depth sky duplicate.
@@ -1025,7 +1034,7 @@ public final class RingWorldRenderer {
         poseStack.scale(worldScale, worldScale, worldScale);
         for (Planet planet : ringEdges) {
             int sectionIndex = RingWorldDimensions.nearestSectionIndex(
-                    planet.getCenter().x, planet.getCenter().z, starCenter.x, starCenter.z
+                    planet.getUnscaledCenter().x, planet.getUnscaledCenter().z, starCenter.x, starCenter.z
             );
             ResourceLocation texture = getSurfaceTexture(planet);
             RenderType surfaceType = guiSurfaceRenderType(texture);

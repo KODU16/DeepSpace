@@ -41,6 +41,7 @@ import java.util.SplittableRandom;
  * Draws a moon-phase-dependent selection of other planets in surface night skies.
  */
 public final class NightSkyPlanetRenderer {
+    // Surface sky selection, apparent sizes, and cached meshes use canonical geometry.
     private static final ResourceLocation OVERWORLD = ResourceLocation.withDefaultNamespace("overworld");
     private static final ResourceLocation SPACE = Deepspace.path("space");
     private static final float CELESTIAL_RENDER_DISTANCE = 100.0f;
@@ -230,7 +231,7 @@ public final class NightSkyPlanetRenderer {
                     || isGeneratedPlanetSurface(observer) && !isGeneratedPlanetSurface(candidate)) {
                 continue;
             }
-            double distance = observer.getCenter().distanceTo(candidate.getCenter());
+            double distance = observer.getUnscaledCenter().distanceTo(candidate.getUnscaledCenter());
             double diameter = planetDiameter(candidate);
             if (distance > 0.0 && diameter > 0.0 && !PlanetRenderer.getSurfaceTextures(candidate).isEmpty()) {
                 planetsById.put(candidate.getId(), candidate);
@@ -277,8 +278,8 @@ public final class NightSkyPlanetRenderer {
     }
 
     private static double planetDiameter(Planet planet) {
-        var min = planet.getBoundingBoxMin();
-        var max = planet.getBoundingBoxMax();
+        var min = planet.getUnscaledBoundingBoxMin();
+        var max = planet.getUnscaledBoundingBoxMax();
         return Math.max(
                 Math.abs(max.x - min.x),
                 Math.max(Math.abs(max.y - min.y), Math.abs(max.z - min.z))

@@ -35,6 +35,7 @@ import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.ModOptions;
 import world.landfall.deepspace.integration.IrisIntegration;
 import world.landfall.deepspace.planet.Galaxy;
+import world.landfall.deepspace.planet.SpaceObjectScale;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.planet.RingWorldNoonTime;
@@ -376,16 +377,17 @@ public class SunRenderer {
         }
     }
 
+    // Surface meshes and distances deliberately use unscaled star and planet geometry.
     private static Cube createSurfaceMesh(Sun star, Planet planet, Sun hostSun) {
-        var sunCenter = star.getCenter();
+        var sunCenter = star.getUnscaledCenter();
         // Keep cached surface meshes independent of the render distance, which changes across dimensions.
         float scale = SunRenderMath.apparentScale(
                 1.0F,
                 surfaceStarDistance(star, planet, hostSun)
         ) * surfaceStarVisualScale(star, planet, hostSun);
         return new Cube(
-                star.getBoundingBoxMin().subtract(sunCenter).toVector3f(),
-                star.getBoundingBoxMax().subtract(sunCenter).toVector3f(),
+                star.getUnscaledBoundingBoxMin().subtract(sunCenter).toVector3f(),
+                star.getUnscaledBoundingBoxMax().subtract(sunCenter).toVector3f(),
                 scale,
                 false
         );
@@ -393,16 +395,16 @@ public class SunRenderer {
 
     /** Converts each star's model radius to the same apparent units used by cluster offsets. */
     private static float surfaceStarApparentRadius(Sun star, Planet observer, Sun hostSun) {
-        return (float) star.getModelRadius()
+        return (float) star.getUnscaledModelRadius()
                 * SunRenderMath.apparentScale(1.0F, surfaceStarDistance(star, observer, hostSun))
                 * surfaceStarVisualScale(star, observer, hostSun);
     }
 
     /** Computes a bounded host-star enlargement from the ring and star's actual dimensions. */
     private static float ringWorldHostStarVisualScale(Sun sun, Planet observer) {
-        Vec3 size = sun.getBoundingBoxMax().subtract(sun.getBoundingBoxMin());
+        Vec3 size = sun.getUnscaledBoundingBoxMax().subtract(sun.getUnscaledBoundingBoxMin());
         double transverseDiameter = Math.min(size.y, Math.max(size.x, size.z));
-        double starDistance = sun.getCenter().distanceTo(observer.getCenter());
+        double starDistance = sun.getUnscaledCenter().distanceTo(observer.getUnscaledCenter());
         return SunRenderMath.ringWorldStarVisualScale(
                 transverseDiameter,
                 starDistance,
@@ -421,7 +423,7 @@ public class SunRenderer {
 
     private static double surfaceStarDistance(Sun star, Planet observer, Sun hostSun) {
         Planet scaleObserver = surfaceStarScaleObserver(star, observer, hostSun);
-        return star.getCenter().distanceTo(scaleObserver.getCenter());
+        return star.getUnscaledCenter().distanceTo(scaleObserver.getUnscaledCenter());
     }
 
     private static Planet surfaceStarScaleObserver(Sun star, Planet observer, Sun hostSun) {
@@ -682,6 +684,7 @@ public class SunRenderer {
         // Reserve room for the far side of a ring while keeping its star in the same frame.
         double ringExtent = ringGalaxy
                 ? Math.hypot(RingWorldDimensions.OUTER_RADIUS, RingWorldDimensions.MODEL_HALF_HEIGHT)
+                        * SpaceObjectScale.size()
                 : 0.0D;
         return SunRenderMath.boundedCelestialScale(celestialRenderDistance(), distance + ringExtent);
     }
@@ -692,7 +695,7 @@ public class SunRenderer {
     }
 
     private static float[] directionFromPlanet(Planet planet, Sun sun) {
-        Vector3f direction = sun.getCenter().subtract(planet.getCenter()).normalize().toVector3f();
+        Vector3f direction = sun.getUnscaledCenter().subtract(planet.getUnscaledCenter()).normalize().toVector3f();
         return new float[]{direction.x, direction.y, direction.z};
     }
 

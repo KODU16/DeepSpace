@@ -20,8 +20,12 @@ public class NetworkHandler {
      */
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("2");
+        // Planet synchronization now includes both persisted spatial multipliers.
+        PayloadRegistrar registrar = event.registrar("3");
         
+        // Gravity changes are authorized by the server after checking the equipped boots.
+        registrar.playToServer(GravityBootsTogglePacket.TYPE, GravityBootsTogglePacket.STREAM_CODEC,
+                GravityBootsTogglePacket::handle);
         // Register planet sync packet
         registrar.playToClient(
             PlanetSyncPacket.TYPE,

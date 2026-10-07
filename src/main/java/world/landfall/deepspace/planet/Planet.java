@@ -145,8 +145,8 @@ public class Planet {
             Codec.STRING.fieldOf("id").forGetter(Planet::getId),
             Codec.STRING.fieldOf("name").forGetter(Planet::getName),
             ResourceLocation.CODEC.fieldOf("dimension").forGetter(planet -> planet.getDimension().location()),
-            Vec3.CODEC.fieldOf("boundingBoxMin").forGetter(Planet::getBoundingBoxMin),
-            Vec3.CODEC.fieldOf("boundingBoxMax").forGetter(Planet::getBoundingBoxMax),
+            Vec3.CODEC.fieldOf("boundingBoxMin").forGetter(Planet::getUnscaledBoundingBoxMin),
+            Vec3.CODEC.fieldOf("boundingBoxMax").forGetter(Planet::getUnscaledBoundingBoxMax),
             Codec.list(PlanetDecoration.CODEC).optionalFieldOf("decorations").forGetter(Planet::getDecorations),
             Codec.DOUBLE.listOf().comapFlatMap((values) -> Util.fixedSize(values, 2).map((fixed) -> new Vec2(fixed.get(0).floatValue(), fixed.get(1).floatValue())), (value) -> List.of((double)value.x, (double)value.y)).fieldOf("physicalMin").forGetter(Planet::getPhysicalMin),
             Codec.DOUBLE.listOf().comapFlatMap((values) -> Util.fixedSize(values, 2).map((fixed) -> new Vec2(fixed.get(0).floatValue(), fixed.get(1).floatValue())), (value) -> List.of((double)value.x, (double)value.y)).fieldOf("physicalMax").forGetter(Planet::getPhysicalMax),
@@ -154,7 +154,7 @@ public class Planet {
             ResourceLocation.CODEC.optionalFieldOf("texture").forGetter(Planet::getSingleTexture),
             ResourceLocation.CODEC.listOf().optionalFieldOf("textures", List.of()).forGetter(Planet::getSixFaceTextures),
             ResourceLocation.CODEC.optionalFieldOf("galaxy", Deepspace.path("space")).forGetter(planet -> planet.getGalaxy().location()),
-            Vec3.CODEC.optionalFieldOf("warpTarget").forGetter(Planet::getWarpTarget),
+            Vec3.CODEC.optionalFieldOf("warpTarget").forGetter(Planet::getUnscaledWarpTarget),
             Codec.INT.optionalFieldOf("atmosphereEntryHeight", AUTOMATIC_ATMOSPHERE_HEIGHT).forGetter(Planet::getAtmosphereEntryHeight),
             Codec.INT.optionalFieldOf("atmosphereExitHeight", AUTOMATIC_ATMOSPHERE_HEIGHT).forGetter(Planet::getAtmosphereExitHeight),
             Codec.BOOL.optionalFieldOf("ringWorldEdge", false).forGetter(Planet::isRingWorldEdge)
@@ -372,7 +372,7 @@ public class Planet {
      */
     @NotNull
     public Vec3 getBoundingBoxMin() {
-        return boundingBoxMin;
+        return SpaceObjectScale.planetBound(this, false);
     }
 
     /**
@@ -380,7 +380,7 @@ public class Planet {
      */
     @NotNull
     public Vec3 getBoundingBoxMax() {
-        return boundingBoxMax;
+        return SpaceObjectScale.planetBound(this, true);
     }
     /**
      * @return The minimum coordinates of the dimension as it appears in the planet texture
@@ -449,8 +449,15 @@ public class Planet {
 
     @NotNull
     public Optional<Vec3> getWarpTarget() {
-        return Optional.ofNullable(warpTarget);
+        // Warp destinations use the target system geometry, including size-only ring arrivals.
+        return getUnscaledWarpTarget().map(target -> SpaceObjectScale.arrival(
+                target, PlanetRegistry.getGalaxyByDimension(dimension)));
     }
+
+    /** Canonical coordinates are serialized and used for generation and surface skies. */
+    public Vec3 getUnscaledBoundingBoxMin() { return boundingBoxMin; }
+    public Vec3 getUnscaledBoundingBoxMax() { return boundingBoxMax; }
+    public Optional<Vec3> getUnscaledWarpTarget() { return Optional.ofNullable(warpTarget); }
 
     public int getAtmosphereEntryHeight() {
         return atmosphereEntryHeight;
@@ -668,23 +675,28 @@ public class Planet {
      */
     public boolean isWithinBounds(@NotNull Vec3 position) {
         Objects.requireNonNull(position, "Position cannot be null");
-        return position.x >= boundingBoxMin.x && position.x <= boundingBoxMax.x &&
-               position.y >= boundingBoxMin.y && position.y <= boundingBoxMax.y &&
-               position.z >= boundingBoxMin.z && position.z <= boundingBoxMax.z;
+        Vec3 min = getBoundingBoxMin();
+        Vec3 max = getBoundingBoxMax();
+        return position.x >= min.x && position.x <= max.x &&
+               position.y >= min.y && position.y <= max.y &&
+               position.z >= min.z && position.z <= max.z;
     }
 
     /** Returns the exact axis-aligned cube used by the planet renderer. */
     @NotNull
     public AABB getModelBounds() {
-        return new AABB(boundingBoxMin, boundingBoxMax);
+        return new AABB(getBoundingBoxMin(), getBoundingBoxMax());
     }
 
     /** Checks collision against the same cube coordinates used to build the rendered model. */
     public boolean intersectsModel(@NotNull AABB bounds) {
         Objects.requireNonNull(bounds, "Bounds cannot be null");
+        // Contact checks use the same scaled bounds as space rendering and transfers.
+        Vec3 min = getBoundingBoxMin();
+        Vec3 max = getBoundingBoxMax();
         return PlanetModelBounds.intersects(
-                boundingBoxMin.x, boundingBoxMin.y, boundingBoxMin.z,
-                boundingBoxMax.x, boundingBoxMax.y, boundingBoxMax.z,
+                min.x, min.y, min.z,
+                max.x, max.y, max.z,
                 bounds.minX, bounds.minY, bounds.minZ,
                 bounds.maxX, bounds.maxY, bounds.maxZ
         );
@@ -711,6 +723,11 @@ public class Planet {
      */
     @NotNull
     public Vec3 getCenter() {
+        return SpaceObjectScale.planetCenter(this);
+    }
+
+    /** Returns the authored center independently of the current save's scale. */
+    public Vec3 getUnscaledCenter() {
         return new Vec3(
             (boundingBoxMin.x + boundingBoxMax.x) / 2.0,
             (boundingBoxMin.y + boundingBoxMax.y) / 2.0,
@@ -891,8 +908,9 @@ public class Planet {
                ", description='" + description + '\'' +
                '}';
     }
+    // Map the resized space model back to the unchanged physical surface footprint.
     public float blockScale() {
-        var dist1 = Math.abs(boundingBoxMax.subtract(boundingBoxMin).x);
+        var dist1 = Math.abs(getBoundingBoxMax().subtract(getBoundingBoxMin()).x);
         var dist2 = Math.abs(physicalMax.x - physicalMin.x);
         return (float) (dist2 / dist1);
     }

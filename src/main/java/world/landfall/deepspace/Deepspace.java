@@ -41,6 +41,8 @@ public class Deepspace {
     public static final Supplier<CreativeModeTab> TAB = CREATIVE_MODE_TABS.register("deepspace", () -> CreativeModeTab.builder()
             .displayItems((params, output) -> {
                 output.accept(ModItems.DEEPSPACE_HELMET);
+                // Gravity boots belong beside the space helmet in the equipment tab.
+                output.accept(ModItems.GRAVITY_BOOTS);
                 output.accept(ModItems.DEEPSPACE_TERMINAL_ITEM);
                 // Expose the relay engine with its authored model in the creative tab.
                 output.accept(ModItems.HYPER_RELAY_ENGINE_ITEM);

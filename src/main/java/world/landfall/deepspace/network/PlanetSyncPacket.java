@@ -13,6 +13,7 @@ import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetRegistry;
 import world.landfall.deepspace.planet.Galaxy;
+import world.landfall.deepspace.planet.SpaceObjectScale;
 import world.landfall.deepspace.render.PlanetDecorationsRenderer;
 import world.landfall.deepspace.render.PlanetRenderer;
 import world.landfall.deepspace.render.NightSkyPlanetRenderer;
@@ -29,9 +30,15 @@ import java.util.Objects;
  * Network packet for synchronizing planet data from server to client.
  */
 public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, String changedPlanetId,
-                               boolean textureChanged)
+                               boolean textureChanged, double spaceObjectSizeScale, double spaceObjectDistanceScale)
         implements CustomPacketPayload {
     
+    /** Every packet snapshots the authoritative save multipliers alongside canonical object coordinates. */
+    public PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, String changedPlanetId, boolean textureChanged) {
+        this(planets, galaxies, changedPlanetId, textureChanged, SpaceObjectScale.size(),
+                SpaceObjectScale.distance());
+    }
+
     private static final Logger LOGGER = LogUtils.getLogger();
     
     public static final Type<PlanetSyncPacket> TYPE = new Type<>(
@@ -98,6 +105,8 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
             buffer.writeUtf(packet.changedPlanetId);
         }
         buffer.writeBoolean(packet.textureChanged);
+        buffer.writeDouble(packet.spaceObjectSizeScale);
+        buffer.writeDouble(packet.spaceObjectDistanceScale);
     }
     
     /**
@@ -119,7 +128,7 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
         List<Galaxy> galaxies = buffer.readList(Galaxy::fromNetwork);
         String changedPlanetId = buffer.readBoolean() ? buffer.readUtf() : null;
         boolean textureChanged = buffer.readBoolean();
-        return new PlanetSyncPacket(planets, galaxies, changedPlanetId, textureChanged);
+        return new PlanetSyncPacket(planets, galaxies, changedPlanetId, textureChanged, buffer.readDouble(), buffer.readDouble());
     }
     
     /**
@@ -132,6 +141,7 @@ public record PlanetSyncPacket(List<Planet> planets, List<Galaxy> galaxies, Stri
         Objects.requireNonNull(context, "Context cannot be null");
         
         context.enqueueWork(() -> {
+            SpaceObjectScale.synchronize(packet.spaceObjectSizeScale, packet.spaceObjectDistanceScale);
             // The integrated server shares this registry; replacing its planets detaches active sampling jobs.
             // Local packets only refresh rendering so completed maps remain on the authoritative objects.
             if (packet.changedPlanetId != null) {

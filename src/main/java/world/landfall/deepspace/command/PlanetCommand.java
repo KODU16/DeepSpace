@@ -71,10 +71,10 @@ public class PlanetCommand {
             Vec3 min = planet.getBoundingBoxMin();
             Vec3 max = planet.getBoundingBoxMax();
             
+            // Names and dimension keys identify planets without exposing legacy author-branded cache IDs.
             Component planetInfo = Component.literal(String.format(
-                "- %s (%s): %s [%.1f,%.1f,%.1f] to [%.1f,%.1f,%.1f]",
+                "- %s: %s [%.1f,%.1f,%.1f] to [%.1f,%.1f,%.1f]",
                 planet.getName(),
-                planet.getId(),
                 planet.getDimension().location(),
                 min.x, min.y, min.z,
                 max.x, max.y, max.z
@@ -197,7 +197,7 @@ public class PlanetCommand {
             double distanceToCenter = playerPos.distanceTo(center);
             
             source.sendSuccess(() -> Component.literal(String.format(
-                "Current Planet: %s (%s)", currentPlanet.getName(), currentPlanet.getId()
+                "Current Planet: %s", currentPlanet.getName()
             )), false);
             
             source.sendSuccess(() -> Component.literal(String.format(

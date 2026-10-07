@@ -67,6 +67,13 @@ public record Galaxy(
         }
     }
 
+    /** Arrival uses save geometry while its serialized component stays canonical. */
+    public Vec3 arrival() {
+        return SpaceObjectScale.arrival(arrival, this);
+    }
+
+    public Vec3 unscaledArrival() { return arrival; }
+
     public boolean isRingWorldSectionBroken(int sectionIndex) {
         return RingWorldDamage.isBroken(brokenRingSections, sectionIndex);
     }

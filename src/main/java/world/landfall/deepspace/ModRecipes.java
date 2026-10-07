@@ -6,6 +6,7 @@ import net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import world.landfall.deepspace.recipe.HelmetHudRecipe;
+import world.landfall.deepspace.recipe.GravityBootsRecipe;
 
 import java.util.function.Supplier;
 
@@ -15,6 +16,10 @@ public final class ModRecipes {
     // A custom recipe retains all components of the helmet receiving the HUD.
     public static final Supplier<RecipeSerializer<HelmetHudRecipe>> HELMET_HUD =
             SERIALIZERS.register("helmet_hud", () -> new SimpleCraftingRecipeSerializer<>(HelmetHudRecipe::new));
+
+    // Upgrade arbitrary foot equipment while preserving its original components.
+    public static final Supplier<RecipeSerializer<GravityBootsRecipe>> GRAVITY_BOOTS =
+            SERIALIZERS.register("gravity_boots_upgrade", () -> new SimpleCraftingRecipeSerializer<>(GravityBootsRecipe::new));
 
     private ModRecipes() {
     }

@@ -17,6 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
@@ -48,6 +49,8 @@ public class PlanetRegistry {
     
     private static final Map<String, Planet> planets = new ConcurrentHashMap<>();
     private static volatile Sun sun;
+    // Player-facing primary-system names follow the active save; legacy IDs stay stable for persisted maps.
+    private static volatile String primaryGalaxyName = "Deep Space";
     private static final Map<ResourceKey<Level>, Planet> planetsByDimension = new ConcurrentHashMap<>();
     private static volatile Map<ResourceKey<Level>, List<Planet>> planetsByGalaxy = Map.of();
     private static final Map<String, Galaxy> galaxies = new ConcurrentHashMap<>();
@@ -68,19 +71,19 @@ public class PlanetRegistry {
         public double[] boundingBoxMax;
         public double hurtRadius;
         public SunConfig(Sun sun) {
-            var boundingBoxMin = sun.getBoundingBoxMin();
+            var boundingBoxMin = sun.getUnscaledBoundingBoxMin();
             this.boundingBoxMin = new double[]{
                     boundingBoxMin.x,
                     boundingBoxMin.y,
                     boundingBoxMin.z
             };
-            var boundingBoxMax = sun.getBoundingBoxMax();
+            var boundingBoxMax = sun.getUnscaledBoundingBoxMax();
             this.boundingBoxMax = new double[]{
                     boundingBoxMax.x,
                     boundingBoxMax.y,
                     boundingBoxMax.z
             };
-            this.hurtRadius = sun.getHurtRadius();
+            this.hurtRadius = sun.getUnscaledHurtRadius();
         }
     }
     public static class PlanetConfig {
@@ -103,14 +106,14 @@ public class PlanetRegistry {
             this.name = planet.getName();
             this.dimension = planet.getDimension().location().toString();
             this.boundingBoxMin = new double[]{
-                planet.getBoundingBoxMin().x,
-                planet.getBoundingBoxMin().y,
-                planet.getBoundingBoxMin().z
+                planet.getUnscaledBoundingBoxMin().x,
+                planet.getUnscaledBoundingBoxMin().y,
+                planet.getUnscaledBoundingBoxMin().z
             };
             this.boundingBoxMax = new double[]{
-                planet.getBoundingBoxMax().x,
-                planet.getBoundingBoxMax().y,
-                planet.getBoundingBoxMax().z
+                planet.getUnscaledBoundingBoxMax().x,
+                planet.getUnscaledBoundingBoxMax().y,
+                planet.getUnscaledBoundingBoxMax().z
             };
             if (planet.getDecorations().isPresent())
                 this.decorations = planet.getDecorations().get();
@@ -588,7 +591,8 @@ public class PlanetRegistry {
         if (sun == null) {
             return;
         }
-        Vec3 center = sun.getCenter();
+        // Rebuilding the primary system must not bake the save multiplier into its definitions.
+        Vec3 center = sun.getUnscaledCenter();
         double radius = StarIdentity.BASE_STAR_RADIUS;
         int primaryColor = sun.getColor() == 0xFFFFFF
                 ? spectralColorForStage("G4")
@@ -596,7 +600,7 @@ public class PlanetRegistry {
         Sun primary = new Sun(
                 center.subtract(radius, radius, radius),
                 center.add(radius, radius, radius),
-                sun.getHurtRadius(),
+                sun.getUnscaledHurtRadius(),
                 "Sun",
                 "G4",
                 primaryColor
@@ -604,7 +608,7 @@ public class PlanetRegistry {
         sun = primary;
         registerGalaxyUnsafe(new Galaxy(
                 "landfall",
-                "Landfall",
+                primaryGalaxyName,
                 ResourceKey.create(Registries.DIMENSION, Deepspace.path("space")),
                 new Vec3(0.0, 200.0, 10_000.0),
                 primary
@@ -696,9 +700,9 @@ public class PlanetRegistry {
         if (galaxy == null) {
             return null;
         }
-        // The nearest star is the planet's host and therefore its day/night and solar-light reference.
+        // Canonical nearest-star selection keeps the surface sky unchanged by spatial scale settings.
         return galaxy.suns().stream()
-                .min(Comparator.comparingDouble(candidate -> candidate.getCenter().distanceToSqr(planet.getCenter())))
+                .min(Comparator.comparingDouble(candidate -> candidate.getUnscaledCenter().distanceToSqr(planet.getUnscaledCenter())))
                 .orElse(galaxy.sun());
     }
     /**
@@ -898,6 +902,16 @@ public class PlanetRegistry {
                     });
                 });
     }
+    /** Rename before galaxy generation and player synchronization, including servers without Infinity. */
+    @SubscribeEvent
+    public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+        synchronized (registryLock) {
+            String saveName = event.getServer().getWorldData().getLevelName();
+            primaryGalaxyName = saveName.isBlank() ? "Deep Space" : saveName;
+            registerPrimaryGalaxyUnsafe();
+        }
+    }
+
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
@@ -909,6 +923,7 @@ public class PlanetRegistry {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         synchronized (registryLock) {
+            primaryGalaxyName = "Deep Space";
             runtimePrimaryGalaxy = null;
             runtimePrimaryBodies = List.of();
         }

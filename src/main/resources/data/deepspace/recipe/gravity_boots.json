@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_boots"
+    },
+    {
+      "item": "minecraft:heavy_core"
+    }
+  ],
+  "result": {
+    "id": "deepspace:gravity_boots",
+    "count": 1
+  }
+}

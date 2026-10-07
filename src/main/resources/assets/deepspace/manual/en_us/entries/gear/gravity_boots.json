@@ -1,0 +1,23 @@
+{
+  "name": "Gravity Boots",
+  "category": "gear",
+  "sortnum": 1,
+  "pages": [
+    {
+      "title": "Crafting and Appearance",
+      "text": "Craft one pair of iron boots and one Heavy Core shapelessly to obtain Gravity Boots. Their item texture, equipped appearance, and armor stats match vanilla iron boots. Equip them in the feet slot; the ability starts enabled."
+    },
+    {
+      "title": "Gravity Near Ships",
+      "text": "Works only in DeepSpace galaxy dimensions. When a Sable sublevel structure lies within eight blocks beneath your feet along negative Y, normal player gravity returns. Leaving that range restores weightlessness. Planet surfaces and other mods' space dimensions are unaffected; ship and other entity gravity rules remain unchanged."
+    },
+    {
+      "title": "Toggle Controls",
+      "text": "Press K by default to toggle the boots, or rebind the key in Controls. The switch is stored on the current footwear and synchronized with the server. Disabled boots do not restore space gravity. Each equipped item retains its own switch state."
+    },
+    {
+      "title": "Upgrade Other Footwear",
+      "text": "Craft Gravity Boots shapelessly with any other feet-slot equipment, including modded items. The target receives the gravity ability while retaining its enchantments, durability, name, textures, and other components. Upgraded footwear also uses the K toggle."
+    }
+  ]
+}

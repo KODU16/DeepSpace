@@ -15,9 +15,13 @@ public class ModKeyMappings {
     // A DeepSpace binding works with both the standalone and optional VSIE helmet renderers.
     public static final KeyMapping TOGGLE_HELMET_HUD = new KeyMapping("key.deepspace.toggle_helmet_hud",
             KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, "key.categories.deepspace");
+    // The gravity-boot preference can be rebound independently of the helmet HUD.
+    public static final KeyMapping TOGGLE_GRAVITY_BOOTS = new KeyMapping("key.deepspace.toggle_gravity_boots",
+            KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "key.categories.deepspace");
     @SubscribeEvent
     public static void registerBindings(RegisterKeyMappingsEvent event) {
         // Key mappings belong on the mod event bus rather than the gameplay event bus.
         event.register(TOGGLE_HELMET_HUD);
+        event.register(TOGGLE_GRAVITY_BOOTS);
     }
 }

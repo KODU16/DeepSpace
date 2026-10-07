@@ -77,5 +77,10 @@
   "gui.deepspace.hud.unknown_planet": "Unknown planet",
   "gui.deepspace.hud.surface_scanning": "Surface texture scanning (%s/%s, %s%%)",
   "item.deepspace.raw_zinc": "Raw Zinc",
-  "block.deepspace.raw_zinc_block": "Block of Raw Zinc"
+  "block.deepspace.raw_zinc_block": "Block of Raw Zinc",
+  "item.deepspace.gravity_boots": "Gravity Boots",
+  "item.deepspace.gravity_boots.tooltip": "Restores gravity in DeepSpace when a Sable structure is within 8 blocks below your feet. Toggle with the assigned key.",
+  "key.deepspace.toggle_gravity_boots": "Toggle Gravity Boots",
+  "message.deepspace.gravity_boots.enabled": "Gravity boots enabled",
+  "message.deepspace.gravity_boots.disabled": "Gravity boots disabled"
 }

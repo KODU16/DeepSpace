@@ -50,6 +50,9 @@ public class ModItems {
     // Iron armor stats and equipment texture are inherited from the vanilla material.
     public static final DeferredItem<ArmorItem> DEEPSPACE_HELMET = ITEMS.register("deepspace_helmet", () ->
             new DeepSpaceHelmetItem(new Item.Properties().durability(Items.IRON_HELMET.getMaxDamage(Items.IRON_HELMET.getDefaultInstance()))));
+    // The iron material supplies the same equipped texture and armor stats as iron boots.
+    public static final DeferredItem<GravityBootsItem> GRAVITY_BOOTS = ITEMS.register("gravity_boots", () ->
+            new GravityBootsItem(new Item.Properties().durability(Items.IRON_BOOTS.getMaxDamage(Items.IRON_BOOTS.getDefaultInstance()))));
     public static final Supplier<ItemStack> CREATIVE_JET_HELMET_ITEM = () -> {
         var item = JET_HELMET_ITEM.toStack();
         item.set(JetHelmetItem.JetHelmetComponent.SUPPLIER, JetHelmetItem.JetHelmetComponent.creative());

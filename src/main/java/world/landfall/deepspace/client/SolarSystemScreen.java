@@ -15,6 +15,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import world.landfall.deepspace.Deepspace;
 import world.landfall.deepspace.planet.Galaxy;
+import world.landfall.deepspace.planet.SpaceObjectScale;
 import world.landfall.deepspace.planet.ParadiseRating;
 import world.landfall.deepspace.planet.Planet;
 import world.landfall.deepspace.planet.PlanetTextureTier;
@@ -92,7 +93,7 @@ public final class SolarSystemScreen extends Screen {
                 .mapToDouble(body -> body.position.length() + body.radius)
                 .max().orElse(1.0D);
         if (isRingWorld()) {
-            sceneExtent = Math.max(sceneExtent, RingWorldDimensions.OUTER_RADIUS);
+            sceneExtent = Math.max(sceneExtent, (RingWorldDimensions.OUTER_RADIUS * SpaceObjectScale.size()));
         }
         baseScale = Math.max(0.004D, Math.min(width, height - HEADER_HEIGHT) * 0.38D / sceneExtent);
     }
@@ -275,7 +276,7 @@ public final class SolarSystemScreen extends Screen {
                 break;
             }
         }
-        float ringRadius = (float) (RingWorldDimensions.OUTER_RADIUS * baseScale * zoom);
+        float ringRadius = (float) ((RingWorldDimensions.OUTER_RADIUS * SpaceObjectScale.size()) * baseScale * zoom);
         CelestialGuiViewMath.DepthGroup depthGroup = CelestialGuiViewMath.depthGroup(
                 primaryStarIndex,
                 projected.size(),

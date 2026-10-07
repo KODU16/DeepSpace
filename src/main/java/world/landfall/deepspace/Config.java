@@ -50,6 +50,13 @@ public class Config {
     public static final ModConfigSpec.BooleanValue DISABLE_INFINITY_BOOK_PORTALS = BUILDER
             .comment("Disable Infinite Dimensions book-to-Nether-portal travel while both mods are installed.")
             .define("disableInfinityBookPortals", true);
+    // Snapshot this setting once per new save; existing saves keep their original geometry.
+    public static final ModConfigSpec.DoubleValue SPACE_OBJECT_SIZE_SCALE = BUILDER
+            .comment("Space object size multiplier (0.1-100), locked per new save. Legacy saves use 1. Surface skies and relay sizes stay unchanged.")
+            .defineInRange("spaceObjectSizeScale", 1.0D, 0.1D, 100.0D);
+    public static final ModConfigSpec.DoubleValue SPACE_OBJECT_DISTANCE_SCALE = BUILDER
+            .comment("Space coordinate multiplier (0.1-100), locked per new save. Legacy saves use 1. Relays move without resizing; ring worlds and their host stars ignore this multiplier.")
+            .defineInRange("spaceObjectDistanceScale", 1.0D, 0.1D, 100.0D);
     static final ModConfigSpec SPEC = BUILDER.build();
 
     @SubscribeEvent

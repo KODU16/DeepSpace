@@ -77,6 +77,7 @@ import java.util.Set;
  */
 @EventBusSubscriber(modid = Deepspace.MODID)
 public final class InfiniteDimensionsIntegration {
+    // Procedural layout reads canonical coordinates; registry accessors apply the saved scale for gameplay.
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String INFINITY_MOD_ID = "infinity";
@@ -321,7 +322,7 @@ public final class InfiniteDimensionsIntegration {
                 .mapToDouble(star -> starRadius(star) + 900.0 + random.nextDouble() * 600.0)
                 .toArray();
         double systemOuterRadius = generatedStars.stream()
-                .mapToDouble(star -> horizontalDistance(star.getCenter(), new Vec3(0.0, 200.0, 0.0)) + starRadius(star))
+                .mapToDouble(star -> horizontalDistance(star.getUnscaledCenter(), new Vec3(0.0, 200.0, 0.0)) + starRadius(star))
                 .max()
                 .orElse(1_000.0);
         for (int planetIndex = 0; planetIndex < requestedPlanetCount; planetIndex++) {
@@ -344,7 +345,7 @@ public final class InfiniteDimensionsIntegration {
                     generatedStars,
                     generatedPlanets
             );
-            nextOrbitRadii[hostIndex] = horizontalDistance(center, generatedStars.get(hostIndex).getCenter())
+            nextOrbitRadii[hostIndex] = horizontalDistance(center, generatedStars.get(hostIndex).getUnscaledCenter())
                     + halfExtent * Math.sqrt(3.0) + 700.0 + random.nextDouble() * 700.0;
             String id = galaxyId + "_" + world.name().toLowerCase(Locale.ROOT);
             Planet generatedPlanet = new Planet(
@@ -405,7 +406,7 @@ public final class InfiniteDimensionsIntegration {
             String targetName = targetGalaxy == null
                     ? nextGalaxyName(worldSeed, neighborIndex)
                     : targetGalaxy.name();
-            Vec3 targetArrival = targetGalaxy == null ? Vec3.ZERO : targetGalaxy.arrival();
+            Vec3 targetArrival = targetGalaxy == null ? Vec3.ZERO : targetGalaxy.unscaledArrival();
             allBodies.add(createWormhole(
                     galaxyId + "_wormhole_" + graphIndexSlug(neighborIndex),
                     targetName + " Hyper Relay",
@@ -574,7 +575,7 @@ public final class InfiniteDimensionsIntegration {
                 : configuredOverworld.getTextures();
         String saveName = server.getWorldData().getLevelName();
         Sun primaryStar = fixedRingWorldSun(configuredPrimary.sun()).withName(saveName);
-        Vec3 starCenter = primaryStar.getCenter();
+        Vec3 starCenter = primaryStar.getUnscaledCenter();
         InfiniteGalaxyLayout.AtmosphereHeights overworldHeights = InfiniteGalaxyLayout.atmosphereHeights(
                 server.overworld().getMinBuildHeight(),
                 server.overworld().getMaxBuildHeight()
@@ -680,7 +681,8 @@ public final class InfiniteDimensionsIntegration {
         double arrivalRadius = RingWorldDimensions.OUTER_RADIUS + 1_200.0D;
         Galaxy ringPrimary = new Galaxy(
                 configuredPrimary.id(),
-                "Overworld",
+                // The ring origin uses the same save-derived system name as ordinary primary galaxies.
+                saveName,
                 PRIMARY_SPACE,
                 new Vec3(0.0, 200.0, arrivalRadius),
                 primaryStar,
@@ -716,7 +718,7 @@ public final class InfiniteDimensionsIntegration {
         Sun primaryStar = fixedRingWorldSun(generatedStars.getFirst());
         // 环世界只保留一颗固定主恒星，避免随机副恒星破坏各环世界的统一布局。
         List<Sun> ringStars = List.of(primaryStar);
-        Vec3 starCenter = primaryStar.getCenter();
+        Vec3 starCenter = primaryStar.getUnscaledCenter();
         Set<String> usedNames = new HashSet<>();
         List<Planet> edges = new ArrayList<>(4);
         for (int index = 0; index < 4; index++) {
@@ -839,9 +841,9 @@ public final class InfiniteDimensionsIntegration {
             int brokenSections,
             String systemId
     ) {
-        Vec3 center = star.getCenter();
+        Vec3 center = star.getUnscaledCenter();
         if (center.distanceToSqr(new Vec3(0.0D, 200.0D, 0.0D)) > 1.0E-8D
-                || Math.abs(star.getModelRadius() - RING_WORLD_FIXED_STAR_RADIUS) > 1.0E-8D
+                || Math.abs(star.getUnscaledModelRadius() - RING_WORLD_FIXED_STAR_RADIUS) > 1.0E-8D
                 || edges.size() != RING_WORLD_SECTION_COUNT - RingWorldDamage.count(brokenSections)) {
             throw new IllegalStateException("Invalid fixed ring-world star or edge count for " + systemId);
         }
@@ -852,13 +854,13 @@ public final class InfiniteDimensionsIntegration {
                 continue;
             }
             Planet edge = edges.get(healthyEdgeIndex++);
-            Vec3 actual = edge.getCenter();
+            Vec3 actual = edge.getUnscaledCenter();
             Vec3[] expectedBounds = ringWorldEdgeBounds(index, center);
             if (Math.abs(actual.x - expectedCenters[index][0]) > 1.0E-8D
                     || Math.abs(actual.y - center.y) > 1.0E-8D
                     || Math.abs(actual.z - expectedCenters[index][1]) > 1.0E-8D
-                    || edge.getBoundingBoxMin().distanceToSqr(expectedBounds[0]) > 1.0E-8D
-                    || edge.getBoundingBoxMax().distanceToSqr(expectedBounds[1]) > 1.0E-8D) {
+                    || edge.getUnscaledBoundingBoxMin().distanceToSqr(expectedBounds[0]) > 1.0E-8D
+                    || edge.getUnscaledBoundingBoxMax().distanceToSqr(expectedBounds[1]) > 1.0E-8D) {
                 throw new IllegalStateException("Ring-world section " + index + " bounds drifted in " + systemId);
             }
         }
@@ -905,7 +907,7 @@ public final class InfiniteDimensionsIntegration {
             double relayRadius = outerRadius(primary, primary.dimension())
                     + 1_200.0 + random.nextDouble() * 1_200.0;
             Vec3 relayPosition = orbitPoint(
-                    primary.sun().getCenter(),
+                    primary.sun().getUnscaledCenter(),
                     relayRadius,
                     random.nextDouble() * Math.PI * 2.0
             );
@@ -915,10 +917,10 @@ public final class InfiniteDimensionsIntegration {
                     primary.dimension(),
                     ringGalaxy.dimension(),
                     relayPosition,
-                    ringGalaxy.arrival()
+                    ringGalaxy.unscaledArrival()
             ));
             Vec3 returnPosition = orbitPoint(
-                    ringGalaxy.sun().getCenter(),
+                    ringGalaxy.sun().getUnscaledCenter(),
                     outerRadius(ringGalaxy, ringGalaxy.dimension()) + 800.0 + random.nextDouble() * 800.0,
                     random.nextDouble() * Math.PI * 2.0
             );
@@ -928,7 +930,7 @@ public final class InfiniteDimensionsIntegration {
                     ringGalaxy.dimension(),
                     primary.dimension(),
                     returnPosition,
-                    primary.arrival()
+                    primary.unscaledArrival()
             ));
             refreshResolvedWormholes();
             PlanetRegistry.syncToAllPlayers();
@@ -1032,13 +1034,13 @@ public final class InfiniteDimensionsIntegration {
         Galaxy dacha = PlanetRegistry.getGalaxyByDimension(galaxyDimensionKey(seed, index));
         if (source == null || dacha == null) throw new IllegalStateException("Dacha relay endpoint is unavailable");
         Random random = new Random(mix64(seed ^ index * 0x632BE59BD9B4E019L));
-        Vec3 departure = orbitPoint(source.sun().getCenter(), outerRadius(source, source.dimension()) + 1600,
+        Vec3 departure = orbitPoint(source.sun().getUnscaledCenter(), outerRadius(source, source.dimension()) + 1600,
                 random.nextDouble() * Math.PI * 2);
-        Vec3 arrival = orbitPoint(dacha.sun().getCenter(), 6600, random.nextDouble() * Math.PI * 2);
+        Vec3 arrival = orbitPoint(dacha.sun().getUnscaledCenter(), 6600, random.nextDouble() * Math.PI * 2);
         PlanetRegistry.registerPlanet(createWormhole(source.id() + "_wormhole_dacha_" + index,
-                "Dacha Hyper Relay", source.dimension(), dacha.dimension(), departure, dacha.arrival()));
+                "Dacha Hyper Relay", source.dimension(), dacha.dimension(), departure, dacha.unscaledArrival()));
         PlanetRegistry.registerPlanet(createWormhole(dacha.id() + "_wormhole_origin",
-                source.name() + " Hyper Relay", dacha.dimension(), source.dimension(), arrival, source.arrival()));
+                source.name() + " Hyper Relay", dacha.dimension(), source.dimension(), arrival, source.unscaledArrival()));
     }
 
     /** Materializes one graph neighbor only when any wormhole leading to it is actually reached. */
@@ -1151,8 +1153,8 @@ public final class InfiniteDimensionsIntegration {
                 source.id() + "_wormhole_" + graphIndexSlug(targetIndex),
                 (target == null ? nextGalaxyName(seed, targetIndex) : target.name()) + " Hyper Relay",
                 source.dimension(), targetDimension,
-                orbitPoint(source.sun().getCenter(), radius, bearing),
-                target == null ? Vec3.ZERO : target.arrival()
+                orbitPoint(source.sun().getUnscaledCenter(), radius, bearing),
+                target == null ? Vec3.ZERO : target.unscaledArrival()
         ));
         LOGGER.info("[DEEPSPACE-JUMP] phase=GRAPH_RELAY_REPAIRED source={} destination={}",
                 source.dimension().location(), targetDimension.location());
@@ -1180,9 +1182,9 @@ public final class InfiniteDimensionsIntegration {
                     (target == null ? nextGalaxyName(worldSeed, neighborIndex) : target.name()) + " Hyper Relay",
                     source.dimension(),
                     targetDimension,
-                    orbitPoint(source.sun().getCenter(), radius,
+                    orbitPoint(source.sun().getUnscaledCenter(), radius,
                             InfiniteGalaxyLayout.wormholeGraphAngle(-1, neighborIndex, worldSeed)),
-                    target == null ? Vec3.ZERO : target.arrival()
+                    target == null ? Vec3.ZERO : target.unscaledArrival()
             ));
         }
     }
@@ -1211,7 +1213,7 @@ public final class InfiniteDimensionsIntegration {
 
     /** Resolves display and arrival metadata without changing either endpoint's physical graph bearing. */
     private static Planet replaceWormholeMetadataIfNeeded(Planet placeholder, Galaxy target) {
-        if (placeholder.getWarpTarget().filter(target.arrival()::equals).isPresent()
+        if (placeholder.getUnscaledWarpTarget().filter(target.unscaledArrival()::equals).isPresent()
                 && placeholder.getName().equals(target.name() + " Hyper Relay")) {
             return placeholder;
         }
@@ -1220,8 +1222,8 @@ public final class InfiniteDimensionsIntegration {
                 target.name() + " Hyper Relay",
                 placeholder.getGalaxy(),
                 target.dimension(),
-                placeholder.getCenter(),
-                target.arrival()
+                placeholder.getUnscaledCenter(),
+                target.unscaledArrival()
         );
         PlanetRegistry.registerPlanet(resolved);
         return resolved;
@@ -1451,26 +1453,26 @@ public final class InfiniteDimensionsIntegration {
             throw new IllegalStateException("A wormhole destination galaxy must contain at least one planet");
         }
         double firstOrbit = planets.stream()
-                .mapToDouble(planet -> sun.getCenter().distanceTo(planet.getCenter()))
+                .mapToDouble(planet -> sun.getUnscaledCenter().distanceTo(planet.getUnscaledCenter()))
                 .min()
                 .orElseThrow();
         double outerOrbit = planets.stream()
-                .mapToDouble(planet -> sun.getCenter().distanceTo(planet.getCenter()))
+                .mapToDouble(planet -> sun.getUnscaledCenter().distanceTo(planet.getUnscaledCenter()))
                 .max()
                 .orElseThrow();
         double radius = InfiniteGalaxyLayout.interplanetaryArrivalRadius(random, firstOrbit, outerOrbit);
-        return orbitPoint(sun.getCenter(), radius, random.nextDouble() * Math.PI * 2.0);
+        return orbitPoint(sun.getUnscaledCenter(), radius, random.nextDouble() * Math.PI * 2.0);
     }
 
     private static double outerRadius(Galaxy galaxy, ResourceKey<Level> dimension) {
         double planetRadius = PlanetRegistry.getAllPlanets().stream()
                 .filter(planet -> planet.getGalaxy().equals(dimension) && !planet.isWormhole())
-                .mapToDouble(planet -> horizontalDistance(galaxy.sun().getCenter(), planet.getCenter())
-                        + planet.getBoundingBoxMax().subtract(planet.getBoundingBoxMin()).length() * 0.5)
+                .mapToDouble(planet -> horizontalDistance(galaxy.sun().getUnscaledCenter(), planet.getUnscaledCenter())
+                        + planet.getUnscaledBoundingBoxMax().subtract(planet.getUnscaledBoundingBoxMin()).length() * 0.5)
                 .max()
                 .orElse(1_000.0);
         double starRadius = galaxy.suns().stream()
-                .mapToDouble(star -> horizontalDistance(galaxy.sun().getCenter(), star.getCenter()) + starRadius(star))
+                .mapToDouble(star -> horizontalDistance(galaxy.sun().getUnscaledCenter(), star.getUnscaledCenter()) + starRadius(star))
                 .max()
                 .orElse(0.0);
         return Math.max(planetRadius, starRadius);
@@ -1529,16 +1531,16 @@ public final class InfiniteDimensionsIntegration {
         double bodyRadius = halfExtent * Math.sqrt(3.0);
         double orbitRadius = initialOrbitRadius;
         for (int attempt = 0; attempt < 256; attempt++) {
-            Vec3 candidate = orbitPoint(host.getCenter(), orbitRadius, random.nextDouble() * Math.PI * 2.0);
+            Vec3 candidate = orbitPoint(host.getUnscaledCenter(), orbitRadius, random.nextDouble() * Math.PI * 2.0);
             boolean overlapsStar = stars.stream().anyMatch(star -> InfiniteStarSystemLayout.overlaps(
                     candidate.x, candidate.z, bodyRadius,
-                    star.getCenter().x, star.getCenter().z, starRadius(star)
+                    star.getUnscaledCenter().x, star.getUnscaledCenter().z, starRadius(star)
             ));
             boolean overlapsPlanet = planets.stream().anyMatch(planet -> {
-                double otherRadius = planet.getBoundingBoxMax().subtract(planet.getBoundingBoxMin()).length() * 0.5;
+                double otherRadius = planet.getUnscaledBoundingBoxMax().subtract(planet.getUnscaledBoundingBoxMin()).length() * 0.5;
                 return InfiniteStarSystemLayout.overlaps(
                         candidate.x, candidate.z, bodyRadius,
-                        planet.getCenter().x, planet.getCenter().z, otherRadius
+                        planet.getUnscaledCenter().x, planet.getUnscaledCenter().z, otherRadius
                 );
             });
             if (!overlapsStar && !overlapsPlanet) {
@@ -1550,7 +1552,7 @@ public final class InfiniteDimensionsIntegration {
     }
 
     private static double starRadius(Sun star) {
-        return star.getBoundingBoxMax().x - star.getCenter().x;
+        return star.getUnscaledBoundingBoxMax().x - star.getUnscaledCenter().x;
     }
 
     private static double horizontalDistance(Vec3 first, Vec3 second) {

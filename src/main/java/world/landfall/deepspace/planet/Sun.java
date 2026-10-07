@@ -16,9 +16,9 @@ import java.util.Objects;
 public class Sun {
     public static final Codec<Sun> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
-            Vec3.CODEC.fieldOf("boundingBoxMin").forGetter(Sun::getBoundingBoxMin),
-            Vec3.CODEC.fieldOf("boundingBoxMax").forGetter(Sun::getBoundingBoxMax),
-            Codec.DOUBLE.fieldOf("hurtRadius").forGetter(Sun::getHurtRadius),
+            Vec3.CODEC.fieldOf("boundingBoxMin").forGetter(Sun::getUnscaledBoundingBoxMin),
+            Vec3.CODEC.fieldOf("boundingBoxMax").forGetter(Sun::getUnscaledBoundingBoxMax),
+            Codec.DOUBLE.fieldOf("hurtRadius").forGetter(Sun::getUnscaledHurtRadius),
             Codec.STRING.optionalFieldOf("name", "Sun").forGetter(Sun::getName),
             Codec.STRING.optionalFieldOf("stage", "G").forGetter(Sun::getStage),
             Codec.INT.optionalFieldOf("color", 0xFFFFFF).forGetter(Sun::getColor)
@@ -50,16 +50,21 @@ public class Sun {
     }
 
     public Vec3 getBoundingBoxMin() {
-        return boundingBoxMin;
+        return SpaceObjectScale.starBound(this, false);
     }
 
     public Vec3 getBoundingBoxMax() {
-        return boundingBoxMax;
+        return SpaceObjectScale.starBound(this, true);
     }
 
     public double getHurtRadius() {
-        return hurtRadius;
+        return hurtRadius * SpaceObjectScale.size();
     }
+
+    /** Canonical star geometry remains independent of the surface sky and save serialization. */
+    public Vec3 getUnscaledBoundingBoxMin() { return boundingBoxMin; }
+    public Vec3 getUnscaledBoundingBoxMax() { return boundingBoxMax; }
+    public double getUnscaledHurtRadius() { return hurtRadius; }
 
     public String getName() {
         return name;
@@ -72,6 +77,11 @@ public class Sun {
 
     /** Returns the cubic model radius used by generated spectral size labels. */
     public double getModelRadius() {
+        return getUnscaledModelRadius() * SpaceObjectScale.size();
+    }
+
+    /** Surface skies use the original model radius at every save scale. */
+    public double getUnscaledModelRadius() {
         Vec3 size = boundingBoxMax.subtract(boundingBoxMin);
         return Math.max(size.x, Math.max(size.y, size.z)) * 0.5;
     }
@@ -96,6 +106,8 @@ public class Sun {
      */
     public boolean isWithinBounds(@NotNull Vec3 position) {
         Objects.requireNonNull(position, "Position cannot be null");
+        Vec3 boundingBoxMin = getBoundingBoxMin();
+        Vec3 boundingBoxMax = getBoundingBoxMax();
         return position.x >= boundingBoxMin.x && position.x <= boundingBoxMax.x &&
                 position.y >= boundingBoxMin.y && position.y <= boundingBoxMax.y &&
                 position.z >= boundingBoxMin.z && position.z <= boundingBoxMax.z;
@@ -113,12 +125,19 @@ public class Sun {
         if (!GalaxyDimensions.isGalaxy(level.dimension()))
             return false;
         var position = player.position();
+        Vec3 boundingBoxMin = getBoundingBoxMin();
+        Vec3 boundingBoxMax = getBoundingBoxMax();
         return position.x >= boundingBoxMin.x - .5 && position.x <= boundingBoxMax.x + .5 &&
                 position.y >= boundingBoxMin.y - 2 && position.y <= boundingBoxMax.y &&
                 position.z >= boundingBoxMin.z - .5 && position.z <= boundingBoxMax.z + .5;
     }
     @NotNull
     public Vec3 getCenter() {
+        return SpaceObjectScale.starCenter(this);
+    }
+
+    /** The unscaled center is used when generating further stars and planets. */
+    public Vec3 getUnscaledCenter() {
         return new Vec3(
                 (boundingBoxMin.x + boundingBoxMax.x) / 2.0,
                 (boundingBoxMin.y + boundingBoxMax.y) / 2.0,

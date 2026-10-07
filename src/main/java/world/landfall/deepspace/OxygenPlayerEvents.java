@@ -24,6 +24,13 @@ public final class OxygenPlayerEvents {
             return;
         }
 
+        // Space suffocation is temporarily disabled throughout the DeepSpace namespace.
+        if (Deepspace.MODID.equals(player.level().dimension().location().getNamespace())) {
+            player.setData(ModAttatchments.LAST_OXYGENATED, 0.0F);
+            player.setAirSupply(player.getMaxAirSupply());
+            return;
+        }
+
         float lastOxygenated = player.getData(ModAttatchments.LAST_OXYGENATED);
         player.setData(ModAttatchments.LAST_OXYGENATED, lastOxygenated + 0.05F);
         boolean vacuum = SpaceEnvironment.isVacuumDimension(player.level().dimension().location().toString());

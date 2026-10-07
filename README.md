@@ -1,10 +1,10 @@
 # Deep Space (Unofficial Port)
 
 This repository contains an unofficial NeoForge 1.21.1 port of Deep Space. The
-mod provides the Landfall-830 dimensions, solar system, space rendering, and
+mod provides planetary dimensions, solar systems, space rendering, and
 related gameplay logic.
 
-Original mod authors: Mallowwww and confect1ondev.
+Original mod team: Landfall. Original authors: Mallowwww and confect1ondev.
 
 Current author and unofficial port maintainer: KODU16.
 
@@ -100,6 +100,25 @@ planet entry above. Data-pack planets are additive and override matching IDs
 from the common configuration. Run `/reload` to reload, resample, and synchronize
 them.
 
+The primary galaxy and its host star use the active save name in game, including
+ring-world origins. Internal legacy identifiers remain stable for existing
+world data and cached surface maps.
+
+### Space object scale
+
+The common config provides two independent settings, both from `0.1` to `100`
+with a default of `1`:
+
+- `spaceObjectSizeScale` changes planet and star dimensions and the complete ring-world geometry.
+- `spaceObjectDistanceScale` changes ordinary planet/star coordinates and relay coordinates. Relay sizes stay fixed. Ring worlds and their host stars ignore this distance setting; their sections expand around the host with the size setting.
+
+Both values are saved when a new world first starts. Existing worlds without
+saved scale values keep both at `1`, and changing the config does not rescale
+an established world. Planet-surface sky models retain their original sizes
+and placement. Space collision bounds, HUD/map coordinates, and planet transfers
+use the save's scaled geometry. DeepSpace-dimension suffocation is temporarily
+disabled.
+
 ### Download the Tropica example datapack
 
 [Download deepspace_tropical_planet.zip](https://github.com/KODU16/DeepSpace/raw/refs/heads/main/examples/datapacks/deepspace_tropical_planet.zip)
@@ -120,3 +139,16 @@ If a procedurally textured planet renders incorrectly, run
 `/deepspaceclient texturedebug`. The client writes `report.txt` plus the actual
 generated PNG files under `deepspace-debug/planet-textures-<timestamp>` in the
 game directory. Include that directory and `logs/latest.log` in a bug report.
+
+### Gravity boots
+
+Craft gravity boots shapelessly from iron boots and a heavy core. They use the
+vanilla iron-boots texture. Combine gravity boots with any other feet-slot
+equipment in a shapeless recipe to add the ability while preserving that
+equipment's enchantments, durability, name, and other components.
+
+The ability starts enabled and can be toggled with **K** (rebindable). Its state
+is stored on the equipment and synchronized with the server. Only in DeepSpace
+galaxy dimensions, a Sable structure within eight blocks directly below the
+wearer restores normal player gravity. Other entities, ship physics, planetary
+dimensions, and other mods' space dimensions retain their existing gravity rules.
