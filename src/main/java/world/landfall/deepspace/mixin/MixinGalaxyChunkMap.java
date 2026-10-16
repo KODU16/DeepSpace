@@ -1,6 +1,7 @@
 package world.landfall.deepspace.mixin;
 
 import net.minecraft.server.level.ChunkMap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.nbt.CompoundTag;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import world.landfall.deepspace.planet.GalaxyDimensions;
+import world.landfall.deepspace.server.SpaceEntityChunkSupport;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -74,7 +76,11 @@ public abstract class MixinGalaxyChunkMap {
             return;
         }
         // 强制加载的船体区块仍需实体同步，但不依赖临时视距窗口。
-        if (this.level.getForcedChunks().contains(ChunkPos.asLong(x, z))) {
+        // RPL/CBC uses updateChunkForced, whose tickets need not appear in the saved forced-chunk set.
+        // Recognize ready entity-ticking chunks without requesting any chunk loads.
+        if (this.level.getForcedChunks().contains(ChunkPos.asLong(x, z))
+                || SpaceEntityChunkSupport.isSupportedChunk(this.level, x, z)
+                || this.level.isPositionEntityTicking(new BlockPos(x << 4, 0, z << 4))) {
             callback.setReturnValue(true);
         }
     }
