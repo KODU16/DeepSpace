@@ -55,6 +55,9 @@ import world.landfall.deepspace.planet.RingWorldNoonTime;
 import world.landfall.deepspace.planet.Sun;
 import world.landfall.deepspace.planet.StarIdentity;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -110,6 +113,8 @@ public final class InfiniteDimensionsIntegration {
     private static MinecraftServer activeServer;
     private static boolean initialized;
     private static long nextRetryTick;
+    private static final int MAX_INITIALIZE_FAILURES = 5;
+    private static int initializeFailures;
     private static final Map<ResourceKey<Level>, Integer> CHAIN_INDICES = new java.util.HashMap<>();
     private static final Map<ResourceKey<Level>, Integer> DIMENSION_INDICES = new java.util.HashMap<>();
     private static final Set<Integer> GENERATED_INDICES = new HashSet<>();
@@ -138,6 +143,7 @@ public final class InfiniteDimensionsIntegration {
                 && DachaGalaxyState.resolve(event.getServer()).origins().isEmpty()) {
             return;
         }
+        initializeFailures = 0;
         activeServer = event.getServer();
         tryInitialize(activeServer);
     }
@@ -154,6 +160,9 @@ public final class InfiniteDimensionsIntegration {
                 pendingTextureLevels = Set.of();
             }
             return;
+        }
+        if (initializeFailures >= MAX_INITIALIZE_FAILURES) {
+            return; // permanent failure: stop retrying and stop spamming the log
         }
         long gameTime = activeServer.overworld().getGameTime();
         if (gameTime >= nextRetryTick) {
@@ -175,6 +184,7 @@ public final class InfiniteDimensionsIntegration {
             PENDING_REJECTED_LEVEL_STORAGE.clear();
             activeServer = null;
             initialized = false;
+            initializeFailures = 0;
             nextRetryTick = 0L;
             CHAIN_INDICES.clear();
             DIMENSION_INDICES.clear();
@@ -245,8 +255,17 @@ public final class InfiniteDimensionsIntegration {
                     GENERATED_INDICES.size(), graphEnabled, RingWorldOriginState.resolve(server).enabled()
             );
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            LOGGER.warn("Infinite Dimensions galaxy is not ready; retrying after invocation/runtime setup: {}",
-                    exception.getMessage());
+            initializeFailures++;
+            // The exception goes last so SLF4J prints the full stack trace.
+            LOGGER.warn(
+                    "Infinite Dimensions galaxy is not ready (attempt {}/{})",
+                    initializeFailures, MAX_INITIALIZE_FAILURES, exception
+            );
+            if (initializeFailures >= MAX_INITIALIZE_FAILURES) {
+                LOGGER.error("Giving up Infinite Dimensions initialization after {} failed attempts. "
+                                + "Wormholes and generated galaxies will be unavailable until the server restarts.",
+                        initializeFailures);
+            }
         }
     }
 
@@ -2145,11 +2164,26 @@ public final class InfiniteDimensionsIntegration {
             throw new IllegalStateException("Generated definition is unavailable while adding " + id);
         }
 
-        // Reuse the normalized preview; PortalCreator would regenerate and overwrite its min_y policy.
-        Class<?> definitionClass = generatedDefinition.getClass();
+        Class<?> definitionClass = InfiniteDimensionsApi.loadClass("dimensions.RandomDimension");
         Class<?> dimensionGrabber = InfiniteDimensionsApi.loadClass("util.loading.DimensionGrabber");
-        Method readDimension = dimensionGrabber.getMethod("readDimensionFromDisk", definitionClass);
-        LevelStem stem = (LevelStem) readDimension.invoke(null, generatedDefinition);
+
+        // DimensionGrabber declares grabObjectForClient(Minecraft, ...), so Class.getMethod() would try to
+        // load the client-only Minecraft class on a dedicated server. A method handle resolves only the
+        // one method it is asked for.
+        LevelStem stem;
+        try {
+            MethodHandle readDimension = MethodHandles.publicLookup().findStatic(
+                    dimensionGrabber,
+                    "readDimensionFromDisk",
+                    MethodType.methodType(LevelStem.class, definitionClass)
+            );
+            stem = (LevelStem) readDimension.invoke(generatedDefinition);
+        } catch (ReflectiveOperationException | RuntimeException | Error exception) {
+            throw exception;
+        } catch (Throwable throwable) {
+            throw new IllegalStateException("Could not read generated dimension " + id, throwable);
+        }
+
         Method addWorld = server.getClass().getMethod("infinity$addWorld", ResourceKey.class, LevelStem.class);
         addWorld.invoke(server, key, stem);
 
@@ -2169,10 +2203,22 @@ public final class InfiniteDimensionsIntegration {
     private static void disableInfinityShader(MinecraftServer server, ResourceLocation id, ServerLevel level)
             throws ReflectiveOperationException {
         Class<?> optionsClass = InfiniteDimensionsApi.loadClass("options.InfinityOptions");
-        Method access = optionsClass.getMethod("access", Level.class);
-        Object options = access.invoke(null, level);
-        Field dataField = optionsClass.getField("data");
-        CompoundTag data = (CompoundTag) dataField.get(options);
+        CompoundTag data;
+        try {
+            // getMethod() would resolve every public signature, including ofClient(Minecraft),
+            // which cannot load on a dedicated server. A method handle resolves only what it needs.
+            MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+            MethodHandle access = lookup.findStatic(
+                    optionsClass, "access", MethodType.methodType(optionsClass, Level.class));
+            MethodHandle dataGetter = lookup.findVirtual(
+                    optionsClass, "data", MethodType.methodType(CompoundTag.class));
+            Object options = access.invoke((Level) level);
+            data = (CompoundTag) dataGetter.invoke(options);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            throw new IllegalStateException("Could not read Infinite Dimensions options for " + id, exception);
+        } catch (Throwable throwable) {
+            throw new IllegalStateException("Infinite Dimensions options lookup failed for " + id, throwable);
+        }
         if (data == null) {
             throw new IllegalStateException("Infinite Dimensions options are unavailable for " + id);
         }
